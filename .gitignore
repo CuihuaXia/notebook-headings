@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+# Built packages are kept only under releases/ (see README).
+/*.vsix

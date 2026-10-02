@@ -1,0 +1,13 @@
+{
+  // Press F5 to start an Extension Development Host with this extension
+  // loaded from source and the sample files opened as the workspace.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/examples"]
+    }
+  ]
+}

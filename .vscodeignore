@@ -1,0 +1,14 @@
+# Everything not needed at runtime stays out of the .vsix package.
+.git/
+.gitignore
+.vscode/
+node_modules/
+test/
+examples/
+releases/
+docs/
+*.vsix
+README.zh-CN.md
+# README screenshots are shown via GitHub URLs (see README "Development").
+media/screenshots/
+CONTRIBUTING.md
