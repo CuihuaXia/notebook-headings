@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0 — 2026-10-04
+
+- **Cell tags in one click**: a **Tags** button at the bottom right of every
+  notebook cell opens a checklist of common tags (`hide-input`,
+  `remove-output`, `skip-execution`, `parameters`, …) with explanations, and
+  accepts custom tags. Also available as **Notebook Headings: Edit Cell
+  Tags…** in the command palette. New setting `notebookHeadings.cellTagButton`
+  (on by default).
+- This is the only edit the extension can make to a document: it changes just
+  the cell's tags and can be undone with `Cmd+Z`.
+
 ## 1.2.0 — 2026-10-04
 
 - **Output sizes**: each notebook heading now shows its section's total output

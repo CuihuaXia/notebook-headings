@@ -25,5 +25,7 @@
   "color.level3": "Notebook Headings: color of level-3 section headings (blue; usually the #### headings).",
   "color.level4": "Notebook Headings: color of level-4 section headings (purple; usually the ##### headings).",
   "color.level5": "Notebook Headings: color of level-5 section headings (olive; usually the ###### headings).",
-  "color.level6": "Notebook Headings: color of level-6 section headings (gray; used for ###### when a document has several # headings)."
+  "color.level6": "Notebook Headings: color of level-6 section headings (gray; used for ###### when a document has several # headings).",
+  "command.editCellTags": "Notebook Headings: Edit Cell Tags…",
+  "config.cellTagButton": "Show a Tags button at the bottom right of every notebook cell. Clicking it opens a checklist of common tags (hide-input, remove-output, …) to set the cell's tags; this edits only the tags in the cell metadata and can be undone."
 }

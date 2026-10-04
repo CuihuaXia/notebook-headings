@@ -42,8 +42,10 @@ Window** in that window.
   through `vscode.l10n.t('…')` in `src/extension.js`; its Chinese translations
   are in `l10n/bundle.l10n.zh-cn.json`, keyed by the English text. Add a
   translation whenever you add or change user-facing text.
-- Documents are read-only to the extension: never modify the user's notebook
-  or Markdown file.
+- Never change the user's code, text or outputs. The one allowed edit is a
+  cell's tags, made only through the tag picker as a single undoable
+  `WorkspaceEdit`. Tag picker logic lives in `src/tags.js` (tested in
+  `test/tags.test.js`).
 - README images and links use relative paths. When the extension is packaged,
   `vsce` rewrites them to `https://github.com/CuihuaXia/notebook-headings/…`
   URLs, because VS Code's extension details page only loads `https:` images.
@@ -55,9 +57,11 @@ Window** in that window.
 notebook-headings/
 ├── src/
 │   ├── extension.js      VS Code integration: tree view, commands, events
-│   └── headings.js       pure logic: parsing, tree, numbering, filter (no VS Code API)
+│   ├── headings.js       pure logic: parsing, tree, numbering, filter (no VS Code API)
+│   └── tags.js           pure logic of the cell tag picker (no VS Code API)
 ├── test/
-│   └── headings.test.js  unit tests for src/headings.js (`npm test`)
+│   ├── headings.test.js  unit tests for src/headings.js (`npm test`)
+│   └── tags.test.js      unit tests for src/tags.js
 ├── examples/             sample.ipynb and sample.md to try the extension on
 ├── media/
 │   ├── headings.svg      activity bar icon

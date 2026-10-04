@@ -50,7 +50,14 @@ you see the structure first and drill down on demand.
   `Title › 2  Analysis › 2.1  Summary`.
 - **English and Chinese interface.** Commands, menus, settings and messages
   follow VS Code's display language.
-- **Read-only.** Your notebooks and Markdown files are never modified.
+- **One-click cell tags.** A **Tags** button at the bottom right of every
+  notebook cell opens a checklist of common tags (`hide-input`,
+  `remove-output`, `skip-execution`, …) with a short explanation of each, plus
+  any custom tag you type. Tags are stored where Jupyter, Jupyter Book and
+  nbconvert read them.
+- **Safe by design.** The extension never changes your code, text or outputs.
+  The only edit it ever makes is a cell's tags, when you change them in the
+  tag picker, and it can be undone with `Cmd+Z`.
 
 Markdown parsing ignores YAML front matter and fenced code blocks, so
 `# comments` inside code are never mistaken for headings.
@@ -133,6 +140,11 @@ Right-click a heading for:
   heading, that cell is selected too and the status bar says so.
 - **Copy Heading Text** and **Copy Heading Path**.
 
+To tag a cell, click **Tags** at the bottom right of the cell (it shows the
+number of tags once there are some), check or uncheck tags, or type a new one,
+then press Enter. **Notebook Headings: Edit Cell Tags…** in the command palette
+does the same for the selected cell.
+
 Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 "Notebook Headings"):
 
@@ -153,6 +165,7 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.showOutputSize` | `true` | Show the total output size of each notebook section. |
 | `notebookHeadings.followCursor` | `true` | Highlight the current section in the tree. |
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
+| `notebookHeadings.cellTagButton` | `true` | Show the Tags button on notebook cells. |
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |
 
 ### Custom colors

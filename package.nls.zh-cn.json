@@ -25,5 +25,7 @@
   "color.level3": "Notebook Headings：第 3 级小节标题的颜色（蓝色；通常是 #### 标题）。",
   "color.level4": "Notebook Headings：第 4 级小节标题的颜色（紫色；通常是 ##### 标题）。",
   "color.level5": "Notebook Headings：第 5 级小节标题的颜色（橄榄色；通常是 ###### 标题）。",
-  "color.level6": "Notebook Headings：第 6 级小节标题的颜色（灰色；文档中有多个 # 标题时用于 ###### 标题）。"
+  "color.level6": "Notebook Headings：第 6 级小节标题的颜色（灰色；文档中有多个 # 标题时用于 ###### 标题）。",
+  "command.editCellTags": "Notebook Headings：编辑 cell 标签…",
+  "config.cellTagButton": "在每个 notebook cell 右下角显示\"Tags\"按钮。点击后弹出常用标签（hide-input、remove-output 等）的勾选列表，用来设置这个 cell 的标签；只修改 cell 元数据里的标签，可以撤销。"
 }

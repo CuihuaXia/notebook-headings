@@ -8,9 +8,12 @@
  *     resulting tree in the "Notebook Headings" view,
  *   - keep the tree, the status bar and the editor in sync (clicks, cursor
  *     moves, scrolling, edits, settings changes),
- *   - provide the commands contributed in package.json.
+ *   - provide the commands contributed in package.json,
+ *   - offer a "Tags" button on every notebook cell for editing its tags.
  *
- * Nothing here ever modifies a document.
+ * The only change ever made to a document is a cell's tags, and only when
+ * the user edits them in the tag picker (undoable with Cmd+Z). Code, text and
+ * outputs are never touched.
  */
 'use strict';
 
@@ -29,6 +32,7 @@ const {
   ancestry,
   labelOf,
 } = require('./headings');
+const { COMMON_TAGS, isValidTag, nextTags, pickerEntries, sortKeysDeep } = require('./tags');
 
 /** Id of the tree view (must match `contributes.views` in package.json). */
 const VIEW_ID = 'notebookHeadings.view';
@@ -166,6 +170,67 @@ function readSource(source) {
     return { headings: parseNotebookHeadings(cells), total: nb.cellCount, cellBytes };
   }
   return { headings: parseMarkdownHeadings(source.doc.getText()), total: source.doc.lineCount };
+}
+
+// ---------------------------------------------------------------------------
+// Cell tags
+// ---------------------------------------------------------------------------
+//
+// Tags are stored the same way the Jupyter extension and its "Jupyter Cell
+// Tags" companion store them, so all of them see the same list: in
+// `metadata.metadata.tags`, or in `metadata.custom.metadata.tags` with older
+// versions of VS Code's built-in ipynb support (which no longer exports
+// `dropCustomMetadata`). That is where Jupyter, Jupyter Book and nbconvert
+// read them in the saved .ipynb file.
+
+/** Whether this VS Code still keeps Jupyter metadata under `custom`. */
+function useCustomMetadata() {
+  const ipynb = vscode.extensions.getExtension('vscode.ipynb');
+  return !(ipynb && ipynb.exports && ipynb.exports.dropCustomMetadata);
+}
+
+/** A notebook cell's current tags (a copy). */
+function getCellTags(cell) {
+  const md = cell.metadata || {};
+  const tags = useCustomMetadata() ? md.custom && md.custom.metadata && md.custom.metadata.tags : md.metadata && md.metadata.tags;
+  return Array.isArray(tags) ? [...tags] : [];
+}
+
+/** Replace a cell's tags with one undoable edit; other metadata is kept. */
+async function setCellTags(cell, tags) {
+  const md = JSON.parse(JSON.stringify(cell.metadata || {}));
+  const holder = useCustomMetadata() ? ((md.custom = md.custom || {}), md.custom) : md;
+  holder.metadata = holder.metadata || {};
+  if (tags.length) holder.metadata.tags = tags;
+  else delete holder.metadata.tags;
+  const edit = new vscode.WorkspaceEdit();
+  edit.set(cell.notebook.uri, [vscode.NotebookEdit.updateCellMetadata(cell.index, sortKeysDeep(md))]);
+  return vscode.workspace.applyEdit(edit);
+}
+
+/** The "Tags" button at the bottom right of every notebook cell. */
+class CellTagButton {
+  constructor() {
+    this._onDidChange = new vscode.EventEmitter();
+    this.onDidChangeCellStatusBarItems = this._onDidChange.event;
+  }
+
+  refresh() {
+    this._onDidChange.fire();
+  }
+
+  provideCellStatusBarItems(cell) {
+    if (!config().get('cellTagButton', true)) return [];
+    const tags = getCellTags(cell);
+    return [
+      {
+        text: tags.length ? `$(tag) ${tags.length}` : `$(tag) ${t('Tags')}`,
+        tooltip: tags.length ? t('Tags: {0} — click to edit', tags.join(', ')) : t('Click to set tags for this cell'),
+        command: { title: t('Edit Cell Tags'), command: 'notebookHeadings.editCellTags', arguments: [cell] },
+        alignment: vscode.NotebookCellStatusBarAlignment.Right,
+      },
+    ];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +427,7 @@ class HeadingsProvider {
 function activate(context) {
   const provider = new HeadingsProvider();
   const decorations = new LevelDecorations();
+  const tagButton = new CellTagButton();
   const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider, showCollapseAll: false });
 
   const status = vscode.window.createStatusBarItem('notebookHeadings.status', vscode.StatusBarAlignment.Left, 50);
@@ -577,6 +643,57 @@ function activate(context) {
     );
   };
 
+  /**
+   * Tag picker for one cell: common tags with descriptions, the cell's other
+   * tags, and a custom tag typed into the box. Opened from the cell's Tags
+   * button (cell passed in) or the command palette (the selected cell).
+   */
+  const editCellTags = async (cell) => {
+    if (!cell || !cell.notebook) {
+      const ed = vscode.window.activeNotebookEditor;
+      cell = ed && ed.selection && ed.selection.start < ed.notebook.cellCount ? ed.notebook.cellAt(ed.selection.start) : undefined;
+    }
+    if (!cell) {
+      vscode.window.showInformationMessage(t('Notebook Headings: select a notebook cell first.'));
+      return;
+    }
+    const current = getCellTags(cell);
+    const qp = vscode.window.createQuickPick();
+    qp.canSelectMany = true;
+    qp.title = t('Tags for cell {0}', cell.index + 1);
+    qp.placeholder = t('Check or uncheck tags, or type a new tag, then press Enter');
+    qp.items = pickerEntries(current).map((e) => ({
+      label: e.tag,
+      description: e.custom ? t('custom tag') : t(COMMON_TAGS.find((c) => c.tag === e.tag).description),
+      tag: e.tag,
+      picked: e.picked,
+    }));
+    qp.selectedItems = qp.items.filter((i) => i.picked);
+    qp.onDidAccept(async () => {
+      const typed = qp.value.trim();
+      if (typed && !isValidTag(typed)) {
+        vscode.window.showWarningMessage(t('Tags cannot contain spaces: "{0}"', typed));
+        return;
+      }
+      const checked = qp.items.filter((i) => qp.selectedItems.includes(i)).map((i) => i.tag);
+      // A typed name that matches an offered tag means "check it".
+      const extra = typed && qp.items.some((i) => i.tag === typed) ? '' : typed;
+      if (typed && !extra && !checked.includes(typed)) checked.push(typed);
+      const tags = nextTags(current, checked, extra);
+      qp.hide();
+      if (tags.join('\n') === current.join('\n')) return;
+      if (await setCellTags(cell, tags)) {
+        tagButton.refresh();
+        vscode.window.setStatusBarMessage(
+          `$(tag) ${tags.length ? t('Cell {0} tags: {1}', cell.index + 1, tags.join(', ')) : t('Cell {0}: tags removed', cell.index + 1)}`,
+          4000
+        );
+      }
+    });
+    qp.onDidHide(() => qp.dispose());
+    qp.show();
+  };
+
   /** Copy to the clipboard with a short status bar confirmation. */
   const copy = async (text) => {
     if (!text) return;
@@ -590,6 +707,7 @@ function activate(context) {
     view,
     status,
     vscode.window.registerFileDecorationProvider(decorations),
+    vscode.notebooks.registerNotebookCellStatusBarItemProvider('jupyter-notebook', tagButton),
 
     // Remember what the user expands/collapses (ignored while filtering,
     // where everything is expanded by design).
@@ -632,6 +750,7 @@ function activate(context) {
     // redraws while keeping what the user has expanded.
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('notebookHeadings')) return;
+      if (e.affectsConfiguration('notebookHeadings.cellTagButton')) tagButton.refresh();
       if (e.affectsConfiguration('notebookHeadings.markdown')) track();
       if (e.affectsConfiguration('notebookHeadings.defaultExpandLevel')) {
         provider.resetExpansion();
@@ -656,6 +775,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('notebookHeadings.refresh', () => provider.rebuild()),
     vscode.commands.registerCommand('notebookHeadings.selectSection', selectSection),
+    vscode.commands.registerCommand('notebookHeadings.editCellTags', editCellTags),
     vscode.commands.registerCommand('notebookHeadings.copyTitle', (node) => copy(node && node.text)),
     vscode.commands.registerCommand('notebookHeadings.copyPath', (node) =>
       copy(node && ancestry(node).map(label).join(' › '))

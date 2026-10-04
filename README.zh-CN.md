@@ -27,7 +27,8 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。
 - **右键复制**：复制标题文字，或带编号的完整路径，如 `标题 › 2  Analysis › 2.1  Summary`。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
-- **只读**：从不修改你的 notebook 或 Markdown 文件。
+- **一键设置 cell 标签**：每个 notebook cell 右下角有一个 **Tags** 按钮，点击后弹出常用标签（`hide-input`、`remove-output`、`skip-execution` 等）的勾选列表，每个标签都附有简短说明，也可以输入自定义标签。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。
+- **安全**：从不改动你的代码、文字或输出。扩展唯一会做的修改，是你在标签选择器里修改某个 cell 的标签，并且可以用 `Cmd+Z` 撤销。
 
 Markdown 解析会跳过文件开头的 YAML front matter 和代码块，代码里的 `# 注释` 不会被当成标题。
 
@@ -91,6 +92,8 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 - **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
 - **Copy Heading Text**（复制标题文字）、**Copy Heading Path**（复制完整路径）。
 
+给 cell 设置标签：点击 cell 右下角的 **Tags**（已有标签时显示数量），勾选或取消标签，或者输入新标签，然后按 Enter。命令面板里的 **Notebook Headings：编辑 cell 标签…** 对当前选中的 cell 做同样的事。
+
 快捷键（可在"键盘快捷方式"里搜索 "Notebook Headings" 修改）：
 
 | 快捷键（macOS / Windows、Linux） | 生效位置 | 功能 |
@@ -112,6 +115,7 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 | `notebookHeadings.showOutputSize` | `true` | 显示 notebook 每个小节的输出总大小 |
 | `notebookHeadings.followCursor` | `true` | 目录高亮当前所在小节 |
 | `notebookHeadings.statusBar` | `true` | 状态栏显示当前小节 |
+| `notebookHeadings.cellTagButton` | `true` | 在 notebook cell 上显示 Tags 按钮 |
 | `notebookHeadings.markdown` | `true` | 同时支持 Markdown 文件 |
 
 ### 自定义颜色
