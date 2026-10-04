@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings",
   "description": "A heading outline for Jupyter notebooks and Markdown files that opens expanded only to a chosen level.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -112,6 +112,11 @@
       {
         "command": "notebookHeadings.copyPath",
         "title": "Copy Heading Path"
+      },
+      {
+        "command": "notebookHeadings.selectSection",
+        "title": "Select Section",
+        "icon": "$(selection)"
       }
     ],
     "menus": {
@@ -158,9 +163,18 @@
         {
           "command": "notebookHeadings.copyPath",
           "when": "false"
+        },
+        {
+          "command": "notebookHeadings.selectSection",
+          "when": "false"
         }
       ],
       "view/item/context": [
+        {
+          "command": "notebookHeadings.selectSection",
+          "when": "view == notebookHeadings.view",
+          "group": "0_select@1"
+        },
         {
           "command": "notebookHeadings.copyTitle",
           "when": "view == notebookHeadings.view",

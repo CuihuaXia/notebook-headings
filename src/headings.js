@@ -289,6 +289,25 @@ function headingAt(flat, pos) {
 }
 
 /**
+ * The cells (notebook) or lines (Markdown) that make up a heading's section:
+ * from the heading's own cell or line up to, but not including, the next
+ * heading of the same or a shallower level.
+ *
+ * `sharedWith` lists earlier headings that sit in the same cell. Selecting
+ * such a section necessarily includes that whole cell, so those headings come
+ * along too; the caller warns about it. (In Markdown each heading has its own
+ * line, so this is always empty there.)
+ *
+ * @param {object[]} flat all nodes, in document order
+ * @param {object} node
+ * @returns {{ start: number, end: number, sharedWith: object[] }} `end` is exclusive
+ */
+function sectionRange(flat, node) {
+  const sharedWith = flat.filter((n) => n.pos === node.pos && flat.indexOf(n) < flat.indexOf(node));
+  return { start: node.pos, end: node.pos + node.size, sharedWith };
+}
+
+/**
  * The chain of headings from the top level down to `node` (inclusive).
  *
  * @param {object} node
@@ -321,6 +340,7 @@ module.exports = {
   assignColorRanks,
   applyFilter,
   headingAt,
+  sectionRange,
   ancestry,
   labelOf,
 };

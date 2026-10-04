@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-10-04
+
+- **Select Section** (right-click a heading): selects every cell, or line in
+  Markdown, of the section including its subsections, so it can be cut,
+  copied, moved, run or deleted with VS Code's own commands. Documents are
+  still never modified by the extension itself.
+
 ## 1.0.2 — 2026-10-02
 
 - Documentation: the README now covers installing and using the extension;

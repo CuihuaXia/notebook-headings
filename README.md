@@ -40,6 +40,10 @@ you see the structure first and drill down on demand.
   highlighting; matches keep their parent headings visible.
 - **Go to Heading** (`Cmd+Alt+O` / `Ctrl+Alt+O` in a notebook or Markdown
   editor): a searchable list of all headings.
+- **Select a whole section** (right-click → **Select Section**): selects the
+  heading's cells, or lines in Markdown, including all its subsections, so
+  you can cut, copy, move, run or delete the section with VS Code's own
+  commands.
 - **Right-click to copy** a heading's text or its full path, e.g.
   `Title › 2  Analysis › 2.1  Summary`.
 - **Read-only.** Your notebooks and Markdown files are never modified.
@@ -116,7 +120,14 @@ View toolbar, left to right:
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 | `…` → Refresh | Re-read headings (normally automatic). |
 
-Right-click a heading for **Copy Heading Text** and **Copy Heading Path**.
+Right-click a heading for:
+
+- **Select Section**: selects every cell (notebook) or line (Markdown) of the
+  section, subsections included, and moves focus to the editor. Then use
+  `Cmd+X` / `Cmd+V` to move it, `Cmd+C` to copy it, or run or delete the
+  selected cells. If the heading shares its first cell with an earlier
+  heading, that cell is selected too and the status bar says so.
+- **Copy Heading Text** and **Copy Heading Path**.
 
 Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 "Notebook Headings"):

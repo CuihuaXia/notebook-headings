@@ -24,6 +24,7 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。
 - **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
+- **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。
 - **右键复制**：复制标题文字，或带编号的完整路径，如 `标题 › 2  Analysis › 2.1  Summary`。
 - **只读**：从不修改你的 notebook 或 Markdown 文件。
 
@@ -84,7 +85,10 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 | ⊟ Collapse to Default Level | 恢复默认展开层级。 |
 | `…` → Refresh | 重新读取标题（一般会自动刷新，不需要手动点）。 |
 
-在标题上**右键**：**Copy Heading Text**（复制标题文字）、**Copy Heading Path**（复制完整路径）。
+在标题上**右键**：
+
+- **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
+- **Copy Heading Text**（复制标题文字）、**Copy Heading Path**（复制完整路径）。
 
 快捷键（可在"键盘快捷方式"里搜索 "Notebook Headings" 修改）：
 

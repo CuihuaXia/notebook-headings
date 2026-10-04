@@ -23,6 +23,7 @@ const {
   assignColorRanks,
   applyFilter,
   headingAt,
+  sectionRange,
   ancestry,
   labelOf,
 } = require('./headings');
@@ -495,6 +496,47 @@ function activate(context) {
     qp.show();
   };
 
+  /**
+   * "Select Section": select every cell (or line) of a heading's section in
+   * the editor and move focus there, so the user can cut, copy, move, run or
+   * delete it with VS Code's own commands. Nothing is changed here.
+   */
+  const selectSection = async (node) => {
+    const src = provider.source;
+    if (!src || !node) return;
+    const { start, end, sharedWith } = sectionRange(provider.flat, node);
+    lastRevealed = node;
+    let what;
+    if (src.kind === 'notebook') {
+      if (end > src.doc.cellCount) return; // stale node after an edit
+      const range = new vscode.NotebookRange(start, end);
+      const editor = await vscode.window.showNotebookDocument(src.doc, {
+        viewColumn: src.editor.viewColumn,
+        selections: [range],
+        preserveFocus: false,
+      });
+      editor.revealRange(new vscode.NotebookRange(start, start + 1), vscode.NotebookEditorRevealType.AtTop);
+      what = `${end - start} cell${end - start > 1 ? 's' : ''}`;
+    } else {
+      if (start >= src.doc.lineCount) return;
+      const editor = await vscode.window.showTextDocument(src.doc, {
+        viewColumn: src.editor.viewColumn,
+        preserveFocus: false,
+      });
+      // End at the start of the next section's line, or at the very end of
+      // the file, so the selection covers whole lines.
+      const last = Math.min(end, src.doc.lineCount);
+      const to = last < src.doc.lineCount ? new vscode.Position(last, 0) : src.doc.lineAt(last - 1).range.end;
+      editor.selection = new vscode.Selection(new vscode.Position(start, 0), to);
+      editor.revealRange(new vscode.Range(start, 0, start, 0), vscode.TextEditorRevealType.AtTop);
+      what = `${last - start} line${last - start > 1 ? 's' : ''}`;
+    }
+    const shared = sharedWith.length
+      ? ` (its first cell also holds "${truncate(sharedWith[0].text, 30)}")`
+      : '';
+    vscode.window.setStatusBarMessage(`$(selection) Selected ${what} of "${truncate(node.text, 40)}"${shared}`, 6000);
+  };
+
   /** Copy to the clipboard with a short status bar confirmation. */
   const copy = async (text) => {
     if (!text) return;
@@ -573,6 +615,7 @@ function activate(context) {
       provider.resetExpansion();
     }),
     vscode.commands.registerCommand('notebookHeadings.refresh', () => provider.rebuild()),
+    vscode.commands.registerCommand('notebookHeadings.selectSection', selectSection),
     vscode.commands.registerCommand('notebookHeadings.copyTitle', (node) => copy(node && node.text)),
     vscode.commands.registerCommand('notebookHeadings.copyPath', (node) =>
       copy(node && ancestry(node).map(label).join(' › '))

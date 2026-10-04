@@ -196,6 +196,36 @@ test('headingAt finds the enclosing section', () => {
   assert.equal(h.headingAt(flat, 8).text, 'B');
 });
 
+test('sectionRange covers the heading and its subsections', () => {
+  const { flat } = annotate(
+    [
+      { level: 1, text: 'T', pos: 0 },
+      { level: 2, text: 'A', pos: 1 },
+      { level: 3, text: 'A1', pos: 3 },
+      { level: 2, text: 'B', pos: 6 },
+    ],
+    9
+  );
+  assert.deepEqual(h.sectionRange(flat, flat[1]), { start: 1, end: 6, sharedWith: [] }); // A + A1
+  assert.deepEqual(h.sectionRange(flat, flat[2]), { start: 3, end: 6, sharedWith: [] });
+  assert.deepEqual(h.sectionRange(flat, flat[3]), { start: 6, end: 9, sharedWith: [] }); // to the end
+  assert.equal(h.sectionRange(flat, flat[0]).end, 9); // the title spans everything
+});
+
+test('sectionRange reports headings that share the first cell', () => {
+  const cells = [
+    { isMarkdown: true, text: '## Summary\n\n### Means' },
+    { isMarkdown: false, text: 'df.mean()' },
+    { isMarkdown: true, text: '### Spread' },
+  ];
+  const { flat } = annotate(h.parseNotebookHeadings(cells), cells.length);
+  const means = flat.find((n) => n.text === 'Means');
+  const r = h.sectionRange(flat, means);
+  assert.deepEqual([r.start, r.end], [0, 2]);
+  assert.deepEqual(r.sharedWith.map((n) => n.text), ['Summary']);
+  assert.deepEqual(h.sectionRange(flat, flat[0]).sharedWith, []);
+});
+
 test('ancestry and labelOf build the copied path', () => {
   const { flat } = annotate(
     [
