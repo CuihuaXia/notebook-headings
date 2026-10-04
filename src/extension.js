@@ -20,6 +20,8 @@ const {
   parseMarkdownHeadings,
   buildTree,
   assignNumbers,
+  assignOutputSizes,
+  formatBytes,
   assignColorRanks,
   applyFilter,
   headingAt,
@@ -70,6 +72,13 @@ const rankColor = (rank) => new vscode.ThemeColor(`notebookHeadings.level${rank}
 
 /** Label of a node honoring the `numbering` setting. */
 const label = (node) => labelOf(node, config().get('numbering', true));
+
+/** Translated UI text (falls back to English); see l10n/ and package.nls*.json. */
+const t = vscode.l10n.t;
+
+/** "1 cell" / "12 cells", "1 line" / "12 lines", translated. */
+const cellsText = (n) => (n === 1 ? t('1 cell') : t('{0} cells', n));
+const linesText = (n) => (n === 1 ? t('1 line') : t('{0} lines', n));
 
 /** Shorten long text for the status bar and notifications. */
 const truncate = (s, max) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
@@ -124,18 +133,37 @@ function cursorPos(source) {
   return source.editor.selection.active.line;
 }
 
-/** Headings and size (cell or line count) of a source's document. */
+/**
+ * Bytes of output stored in a notebook cell. The outputs are already in
+ * memory as byte arrays, so this only adds up their lengths; output content
+ * is never parsed. (About 0.2 ms for a 3,000-cell notebook with 31 MB of
+ * output.)
+ */
+function cellOutputBytes(cell) {
+  let bytes = 0;
+  for (const output of cell.outputs || []) {
+    for (const item of output.items || []) bytes += item.data ? item.data.byteLength : 0;
+  }
+  return bytes;
+}
+
+/**
+ * Headings and size (cell or line count) of a source's document, plus the
+ * output size of every cell for notebooks.
+ */
 function readSource(source) {
   if (source.kind === 'notebook') {
     const nb = source.doc;
     const cells = [];
+    const cellBytes = [];
     for (let i = 0; i < nb.cellCount; i++) {
       const cell = nb.cellAt(i);
       const isMarkdown = cell.kind === vscode.NotebookCellKind.Markup;
       // Only Markdown cells are parsed, so code cell text is never read.
       cells.push({ isMarkdown, text: isMarkdown ? cell.document.getText() : '' });
+      cellBytes.push(cellOutputBytes(cell));
     }
-    return { headings: parseNotebookHeadings(cells), total: nb.cellCount };
+    return { headings: parseNotebookHeadings(cells), total: nb.cellCount, cellBytes };
   }
   return { headings: parseMarkdownHeadings(source.doc.getText()), total: source.doc.lineCount };
 }
@@ -218,8 +246,9 @@ class HeadingsProvider {
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
-      const { headings, total } = readSource(src);
+      const { headings, total, cellBytes } = readSource(src);
       ({ roots: this.roots, flat: this.flat } = buildTree(headings, prefix, total));
+      if (cellBytes) assignOutputSizes(this.flat, cellBytes);
       assignNumbers(this.roots, config().get('numberH1', false));
       assignColorRanks(this.flat);
       applyFilter(this.roots, this.filter);
@@ -288,10 +317,18 @@ class HeadingsProvider {
     item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
 
     const notebook = this.source && this.source.kind === 'notebook';
+    const size = notebook ? formatBytes(node.bytes) : '';
     item.tooltip =
       `${'#'.repeat(node.level)} ${node.text}\n` +
-      (notebook ? `${node.size} cell${node.size > 1 ? 's' : ''}` : `line ${node.pos + 1}`);
-    if (notebook && config().get('showCellCount', true)) item.description = `${node.size}`;
+      (notebook ? cellsText(node.size) : t('line {0}', node.pos + 1)) +
+      (size ? `\n${t('outputs: {0}', size)}` : '');
+    if (notebook) {
+      // e.g. "34 · 2.1 MB": cell count and/or output size, as configured.
+      const parts = [];
+      if (config().get('showCellCount', true)) parts.push(`${node.size}`);
+      if (size && config().get('showOutputSize', true)) parts.push(size);
+      if (parts.length) item.description = parts.join(' · ');
+    }
 
     if (config().get('levelColors', true)) {
       if (node.rank) {
@@ -328,7 +365,7 @@ function activate(context) {
   const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider, showCollapseAll: false });
 
   const status = vscode.window.createStatusBarItem('notebookHeadings.status', vscode.StatusBarAlignment.Left, 50);
-  status.name = 'Notebook Headings: Current Section';
+  status.name = t('Notebook Headings: Current Section');
   status.command = `${VIEW_ID}.focus`; // auto-generated "focus this view" command
 
   // --- following the cursor: status bar + tree highlight ----------------------
@@ -341,7 +378,7 @@ function activate(context) {
     const node = pos === undefined ? undefined : headingAt(provider.flat, pos);
     if (!node || !config().get('statusBar', true)) return status.hide();
     status.text = `$(list-tree) ${truncate(label(node), 48)}`;
-    status.tooltip = ancestry(node).map(label).join('  ›  ') + '\n\nClick to show the headings view';
+    status.tooltip = ancestry(node).map(label).join('  ›  ') + '\n\n' + t('Click to show the headings view');
     status.show();
   };
 
@@ -401,7 +438,7 @@ function activate(context) {
   const updateFilterUi = () => {
     const q = provider.filter;
     const matches = q ? provider.flat.filter((n) => n.matchAt >= 0).length : 0;
-    view.description = q ? `"${q}" · ${matches} match${matches === 1 ? '' : 'es'}` : undefined;
+    view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
     vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', !!q);
   };
 
@@ -417,7 +454,7 @@ function activate(context) {
     const before = provider.filter;
     const box = vscode.window.createInputBox();
     let accepted = false;
-    box.placeholder = 'Filter headings (Enter to keep, Esc to cancel)';
+    box.placeholder = t('Filter headings (Enter to keep, Esc to cancel)');
     box.value = before;
     box.onDidChangeValue(liveFilter);
     box.onDidAccept(() => {
@@ -470,7 +507,7 @@ function activate(context) {
   /** "Go to Heading…": a searchable list of all headings. */
   const quickJump = () => {
     if (!provider.source || !provider.flat.length) {
-      vscode.window.showInformationMessage('Notebook Headings: no headings in the current editor.');
+      vscode.window.showInformationMessage(t('Notebook Headings: no headings in the current editor.'));
       return;
     }
     const notebook = provider.source.kind === 'notebook';
@@ -478,12 +515,14 @@ function activate(context) {
     const items = provider.flat.map((node) => ({
       // Em spaces indent by depth; $(icon) renders the level shape.
       label: `${' '.repeat(ancestry(node).length - 1)}$(${RANK_ICONS[node.rank]}) ${label(node)}`,
-      description: notebook ? `${node.size} cell${node.size > 1 ? 's' : ''}` : `line ${node.pos + 1}`,
+      description: notebook
+        ? [cellsText(node.size), formatBytes(node.bytes)].filter(Boolean).join(' · ')
+        : t('line {0}', node.pos + 1),
       node,
     }));
     const qp = vscode.window.createQuickPick();
     qp.items = items;
-    qp.placeholder = 'Go to heading';
+    qp.placeholder = t('Go to heading');
     qp.matchOnDescription = false;
     const active = items.find((i) => i.node === current);
     if (active) qp.activeItems = [active]; // start at the current section
@@ -516,7 +555,7 @@ function activate(context) {
         preserveFocus: false,
       });
       editor.revealRange(new vscode.NotebookRange(start, start + 1), vscode.NotebookEditorRevealType.AtTop);
-      what = `${end - start} cell${end - start > 1 ? 's' : ''}`;
+      what = cellsText(end - start);
     } else {
       if (start >= src.doc.lineCount) return;
       const editor = await vscode.window.showTextDocument(src.doc, {
@@ -529,19 +568,20 @@ function activate(context) {
       const to = last < src.doc.lineCount ? new vscode.Position(last, 0) : src.doc.lineAt(last - 1).range.end;
       editor.selection = new vscode.Selection(new vscode.Position(start, 0), to);
       editor.revealRange(new vscode.Range(start, 0, start, 0), vscode.TextEditorRevealType.AtTop);
-      what = `${last - start} line${last - start > 1 ? 's' : ''}`;
+      what = linesText(last - start);
     }
-    const shared = sharedWith.length
-      ? ` (its first cell also holds "${truncate(sharedWith[0].text, 30)}")`
-      : '';
-    vscode.window.setStatusBarMessage(`$(selection) Selected ${what} of "${truncate(node.text, 40)}"${shared}`, 6000);
+    const shared = sharedWith.length ? t(' (its first cell also holds "{0}")', truncate(sharedWith[0].text, 30)) : '';
+    vscode.window.setStatusBarMessage(
+      `$(selection) ${t('Selected {0} of "{1}"', what, truncate(node.text, 40))}${shared}`,
+      6000
+    );
   };
 
   /** Copy to the clipboard with a short status bar confirmation. */
   const copy = async (text) => {
     if (!text) return;
     await vscode.env.clipboard.writeText(text);
-    vscode.window.setStatusBarMessage(`$(check) Copied: ${truncate(text, 60)}`, 2500);
+    vscode.window.setStatusBarMessage(`$(check) ${t('Copied: {0}', truncate(text, 60))}`, 2500);
   };
 
   // --- wiring ---------------------------------------------------------------------------

@@ -19,13 +19,14 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **默认只展开到指定层级**：所有标题都在，只是更深的层级先折叠。随时点"折叠到默认层级"按钮恢复。
 - **自动编号**：`1`、`1.2`、`1.2.3`。只有一个 `#` 标题时把它当作页面标题，不编号，从 `##` 开始编 1、2、3。工具栏一键开关。
 - **按层级区分颜色和形状**：`##` 红 ●、`###` 橙 ○、`####` 蓝 ■、`#####` 紫 ▲、`######` 橄榄 •，浅色/深色主题各有一套配色，颜色可自定义。
-- **小节 cell 数**：notebook 中每个标题右侧的灰色数字是该小节包含的 cell 数。
+- **小节 cell 数和输出大小**：notebook 中每个标题右侧的灰色文字显示该小节包含的 cell 数和输出总大小，例如 `34 · 2.1 MB`，方便找出让 notebook 变大或渲染变慢的小节。
 - **跟随当前位置**：在文档里点击或滚动时，目录自动高亮当前小节；不会自动展开你折叠起来的部分。
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。
 - **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
 - **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。
 - **右键复制**：复制标题文字，或带编号的完整路径，如 `标题 › 2  Analysis › 2.1  Summary`。
+- **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
 - **只读**：从不修改你的 notebook 或 Markdown 文件。
 
 Markdown 解析会跳过文件开头的 YAML front matter 和代码块，代码里的 `# 注释` 不会被当成标题。
@@ -108,6 +109,7 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 | `notebookHeadings.numberH1` | `false` | 一级标题 `#` 也参与编号 |
 | `notebookHeadings.levelColors` | `true` | 按层级上色并显示形状图标 |
 | `notebookHeadings.showCellCount` | `true` | 显示 notebook 每个小节的 cell 数 |
+| `notebookHeadings.showOutputSize` | `true` | 显示 notebook 每个小节的输出总大小 |
 | `notebookHeadings.followCursor` | `true` | 目录高亮当前所在小节 |
 | `notebookHeadings.statusBar` | `true` | 状态栏显示当前小节 |
 | `notebookHeadings.markdown` | `true` | 同时支持 Markdown 文件 |

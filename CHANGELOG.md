@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-10-04
+
+- **Output sizes**: each notebook heading now shows its section's total output
+  size next to the cell count, e.g. `34 · 2.1 MB` (also in the tooltip and in
+  Go to Heading). New setting `notebookHeadings.showOutputSize` (on by
+  default).
+- **Chinese interface**: commands, menus, settings and messages follow VS
+  Code's display language (English or Chinese).
+
 ## 1.1.0 — 2026-10-04
 
 - **Select Section** (right-click a heading): selects every cell, or line in

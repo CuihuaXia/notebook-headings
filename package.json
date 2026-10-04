@@ -1,8 +1,8 @@
 {
   "name": "notebook-headings",
   "displayName": "Notebook Headings",
-  "description": "A heading outline for Jupyter notebooks and Markdown files that opens expanded only to a chosen level.",
-  "version": "1.1.0",
+  "description": "%extension.description%",
+  "version": "1.2.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -35,6 +35,7 @@
     "Other"
   ],
   "main": "./src/extension.js",
+  "l10n": "./l10n",
   "activationEvents": [
     "onNotebook:jupyter-notebook",
     "onLanguage:markdown"
@@ -66,56 +67,56 @@
     "viewsWelcome": [
       {
         "view": "notebookHeadings.view",
-        "contents": "Open a Jupyter notebook or a Markdown file to see its headings."
+        "contents": "%view.welcome%"
       }
     ],
     "commands": [
       {
         "command": "notebookHeadings.quickJump",
-        "title": "Notebook Headings: Go to Heading…",
+        "title": "%command.quickJump%",
         "icon": "$(go-to-search)"
       },
       {
         "command": "notebookHeadings.filter",
-        "title": "Filter Headings",
+        "title": "%command.filter%",
         "icon": "$(search)"
       },
       {
         "command": "notebookHeadings.clearFilter",
-        "title": "Clear Filter",
+        "title": "%command.clearFilter%",
         "icon": "$(close)"
       },
       {
         "command": "notebookHeadings.toggleNumbering",
-        "title": "Toggle Heading Numbers",
+        "title": "%command.toggleNumbering%",
         "icon": "$(list-ordered)"
       },
       {
         "command": "notebookHeadings.resetExpansion",
-        "title": "Collapse to Default Level",
+        "title": "%command.resetExpansion%",
         "icon": "$(collapse-all)"
       },
       {
         "command": "notebookHeadings.refresh",
-        "title": "Refresh",
+        "title": "%command.refresh%",
         "icon": "$(refresh)"
       },
       {
         "command": "notebookHeadings.reveal",
-        "title": "Go to Heading"
+        "title": "%command.reveal%"
       },
       {
         "command": "notebookHeadings.copyTitle",
-        "title": "Copy Heading Text",
+        "title": "%command.copyTitle%",
         "icon": "$(copy)"
       },
       {
         "command": "notebookHeadings.copyPath",
-        "title": "Copy Heading Path"
+        "title": "%command.copyPath%"
       },
       {
         "command": "notebookHeadings.selectSection",
-        "title": "Select Section",
+        "title": "%command.selectSection%",
         "icon": "$(selection)"
       }
     ],
@@ -195,42 +196,47 @@
           "default": 2,
           "minimum": 1,
           "maximum": 6,
-          "description": "Deepest heading level visible when a notebook is opened. Deeper headings are kept but start collapsed (2 = show # and ##, with ## collapsed)."
+          "description": "%config.defaultExpandLevel%"
         },
         "notebookHeadings.numbering": {
           "type": "boolean",
           "default": true,
-          "description": "Show outline numbers (1, 1.1, 1.1.1 ...) before headings."
+          "description": "%config.numbering%"
         },
         "notebookHeadings.numberH1": {
           "type": "boolean",
           "default": false,
-          "description": "Also number level-1 (#) headings. Off by default, so a notebook with a single # title numbers its ## headings as 1, 2, 3."
+          "description": "%config.numberH1%"
         },
         "notebookHeadings.followCursor": {
           "type": "boolean",
           "default": true,
-          "description": "Highlight the section containing the selected or top visible cell. If that heading is inside a collapsed section, the nearest visible ancestor is highlighted instead (the tree is never expanded for you)."
+          "description": "%config.followCursor%"
         },
         "notebookHeadings.showCellCount": {
           "type": "boolean",
           "default": true,
-          "description": "Show the number of cells in each section (up to the next heading of the same or a higher level) next to the heading."
+          "description": "%config.showCellCount%"
+        },
+        "notebookHeadings.showOutputSize": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.showOutputSize%"
         },
         "notebookHeadings.levelColors": {
           "type": "boolean",
           "default": true,
-          "description": "Color headings by level (## red, ### orange, #### blue, ##### purple, ###### olive). Override colors via workbench.colorCustomizations with the notebookHeadings.levelNForeground keys."
+          "description": "%config.levelColors%"
         },
         "notebookHeadings.markdown": {
           "type": "boolean",
           "default": true,
-          "description": "Also show headings for Markdown (.md) files."
+          "description": "%config.markdown%"
         },
         "notebookHeadings.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show the current section in the status bar; click it to open the headings view."
+          "description": "%config.statusBar%"
         }
       }
     },
@@ -251,7 +257,7 @@
     "colors": [
       {
         "id": "notebookHeadings.level1Foreground",
-        "description": "Notebook Headings: color of level-1 section headings (red; usually the ## headings).",
+        "description": "%color.level1%",
         "defaults": {
           "light": "#DC1D04",
           "dark": "#FF6B4A",
@@ -261,7 +267,7 @@
       },
       {
         "id": "notebookHeadings.level2Foreground",
-        "description": "Notebook Headings: color of level-2 section headings (orange; usually the ### headings).",
+        "description": "%color.level2%",
         "defaults": {
           "light": "#F29F05",
           "dark": "#FFC24D",
@@ -271,7 +277,7 @@
       },
       {
         "id": "notebookHeadings.level3Foreground",
-        "description": "Notebook Headings: color of level-3 section headings (blue; usually the #### headings).",
+        "description": "%color.level3%",
         "defaults": {
           "light": "#048ABF",
           "dark": "#4FC3F7",
@@ -281,7 +287,7 @@
       },
       {
         "id": "notebookHeadings.level4Foreground",
-        "description": "Notebook Headings: color of level-4 section headings (purple; usually the ##### headings).",
+        "description": "%color.level4%",
         "defaults": {
           "light": "#5B2A9E",
           "dark": "#B48EE0",
@@ -291,7 +297,7 @@
       },
       {
         "id": "notebookHeadings.level5Foreground",
-        "description": "Notebook Headings: color of level-5 section headings (olive; usually the ###### headings).",
+        "description": "%color.level5%",
         "defaults": {
           "light": "#A69232",
           "dark": "#D6C55A",
@@ -301,7 +307,7 @@
       },
       {
         "id": "notebookHeadings.level6Foreground",
-        "description": "Notebook Headings: color of level-6 section headings (gray; usually the ####### headings).",
+        "description": "%color.level6%",
         "defaults": {
           "light": "#B3B3B3",
           "dark": "#8A8A8A",

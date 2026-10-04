@@ -30,8 +30,10 @@ you see the structure first and drill down on demand.
 - **Level colors and shapes.** `##` red ●, `###` orange ○, `####` blue ■,
   `#####` purple ▲, `######` olive •, with separate light and dark theme
   colors. Every color can be overridden.
-- **Cell counts.** For notebooks, the grey number after a heading is the number
-  of cells in that section.
+- **Cell counts and output sizes.** For notebooks, the grey text after a
+  heading shows how many cells the section has and how much output they store,
+  e.g. `34 · 2.1 MB`, so you can spot the sections that make a notebook large
+  or slow to render.
 - **Follows the cursor.** Clicking or scrolling in the document highlights the
   current section without expanding anything you collapsed.
 - **Status bar** shows the current section; hover for the full path, click to
@@ -46,6 +48,8 @@ you see the structure first and drill down on demand.
   commands.
 - **Right-click to copy** a heading's text or its full path, e.g.
   `Title › 2  Analysis › 2.1  Summary`.
+- **English and Chinese interface.** Commands, menus, settings and messages
+  follow VS Code's display language.
 - **Read-only.** Your notebooks and Markdown files are never modified.
 
 Markdown parsing ignores YAML front matter and fenced code blocks, so
@@ -146,6 +150,7 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.numberH1` | `false` | Also number `#` headings. |
 | `notebookHeadings.levelColors` | `true` | Color headings and icons by level. |
 | `notebookHeadings.showCellCount` | `true` | Show the cell count of each notebook section. |
+| `notebookHeadings.showOutputSize` | `true` | Show the total output size of each notebook section. |
 | `notebookHeadings.followCursor` | `true` | Highlight the current section in the tree. |
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |

@@ -36,6 +36,12 @@ Window** in that window.
   commands and event handling.
 - Commands, menus, keybindings, settings and theme colors are declared in
   `package.json`.
+- The interface is localized. Text in `package.json` (command titles, setting
+  descriptions, …) is written as `%key%` and defined in `package.nls.json`
+  (English) and `package.nls.zh-cn.json` (Chinese). Text shown at runtime goes
+  through `vscode.l10n.t('…')` in `src/extension.js`; its Chinese translations
+  are in `l10n/bundle.l10n.zh-cn.json`, keyed by the English text. Add a
+  translation whenever you add or change user-facing text.
 - Documents are read-only to the extension: never modify the user's notebook
   or Markdown file.
 - README images and links use relative paths. When the extension is packaged,
@@ -59,7 +65,9 @@ notebook-headings/
 │   └── screenshots/      README screenshots (not packaged in the .vsix)
 ├── releases/             built .vsix packages
 ├── .vscode/launch.json   F5 launch configuration
+├── l10n/                 runtime text translations (bundle.l10n.zh-cn.json)
 ├── package.json          extension manifest: commands, menus, settings, colors
+├── package.nls*.json     manifest text in English and Chinese
 ├── CHANGELOG.md
 └── LICENSE               MIT
 ```

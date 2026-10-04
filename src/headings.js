@@ -11,7 +11,7 @@
  *
  *   document text ──scanHeadings──▶ [{ level, text, pos }]   (flat headings)
  *                 ──buildTree────▶ { roots, flat }            (nested nodes)
- *                 ──assignNumbers / assignColorRanks / applyFilter
+ *                 ──assignNumbers / assignOutputSizes / assignColorRanks / applyFilter
  *                                 ▶ nodes annotated for display
  *
  * A "node" is a heading plus tree bookkeeping:
@@ -26,6 +26,7 @@
  *     id:       string   idPrefix + key, used as the VS Code tree item id
  *     size:     number   cells/lines until the next heading of the same or
  *                        a shallower level
+ *     bytes:    number   total output size of those cells (notebooks only)
  *     number:   string   outline number such as "1.3.2" ('' = unnumbered)
  *     rank:     0..6     color/icon rank (0 = page title)
  *     visible:  boolean  survives the current filter
@@ -219,6 +220,37 @@ function assignNumbers(roots, numberH1) {
 }
 
 /**
+ * Attach `bytes` to every node: the total size of the outputs stored in the
+ * cells of its section (the same cells that `size` counts). Uses prefix sums,
+ * so it costs one pass over the cells however many headings there are.
+ *
+ * @param {object[]} flat all nodes from buildTree
+ * @param {number[]} cellBytes output size per cell, indexed by cell position
+ */
+function assignOutputSizes(flat, cellBytes) {
+  const prefix = [0];
+  for (const b of cellBytes) prefix.push(prefix[prefix.length - 1] + b);
+  const at = (i) => prefix[Math.min(Math.max(i, 0), cellBytes.length)];
+  for (const n of flat) n.bytes = at(n.pos + n.size) - at(n.pos);
+}
+
+/**
+ * Human-readable size with decimal units, as macOS Finder shows them:
+ * "", "512 B", "48 KB", "2.1 MB", "1.3 GB". Zero gives an empty string so
+ * sections without outputs show nothing.
+ *
+ * @param {number} bytes
+ * @returns {string}
+ */
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1e6) return `${Math.round(bytes / 1e3)} KB`;
+  if (bytes < 1e9) return `${(bytes / 1e6).toFixed(1)} MB`;
+  return `${(bytes / 1e9).toFixed(1)} GB`;
+}
+
+/**
  * Attach the color/icon rank used for theming (0–6).
  *
  * If the document has exactly one `#` heading it is the page title and gets
@@ -337,6 +369,8 @@ module.exports = {
   parseMarkdownHeadings,
   buildTree,
   assignNumbers,
+  assignOutputSizes,
+  formatBytes,
   assignColorRanks,
   applyFilter,
   headingAt,

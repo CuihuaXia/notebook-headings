@@ -226,6 +226,30 @@ test('sectionRange reports headings that share the first cell', () => {
   assert.deepEqual(h.sectionRange(flat, flat[0]).sharedWith, []);
 });
 
+test('assignOutputSizes sums the outputs of each section', () => {
+  const { flat } = annotate(
+    [
+      { level: 1, text: 'T', pos: 0 },
+      { level: 2, text: 'A', pos: 1 },
+      { level: 3, text: 'A1', pos: 3 },
+      { level: 2, text: 'B', pos: 5 },
+    ],
+    7
+  );
+  //            cell: 0  1   2    3  4     5  6
+  h.assignOutputSizes(flat, [0, 0, 100, 0, 2000, 0, 5]);
+  assert.deepEqual(flat.map((n) => n.bytes), [2105, 2100, 2000, 5]);
+});
+
+test('formatBytes uses decimal units and hides zero', () => {
+  assert.equal(h.formatBytes(0), '');
+  assert.equal(h.formatBytes(undefined), '');
+  assert.equal(h.formatBytes(512), '512 B');
+  assert.equal(h.formatBytes(48_400), '48 KB');
+  assert.equal(h.formatBytes(2_140_000), '2.1 MB');
+  assert.equal(h.formatBytes(1_300_000_000), '1.3 GB');
+});
+
 test('ancestry and labelOf build the copied path', () => {
   const { flat } = annotate(
     [
