@@ -55,6 +55,32 @@ test('scanHeadings: ATX rules, fences and indentation', () => {
   ]);
 });
 
+test('scanHeadings: a closing # needs a space before it', () => {
+  const got = [];
+  h.scanHeadings('## Learn C#\n## Issue #12\n### Done ###\n## A # B', (l, t) => got.push(t));
+  assert.deepEqual(got, ['Learn C#', 'Issue #12', 'Done', 'A # B']);
+});
+
+test('scanHeadings: a fence closes only with an equal or longer fence', () => {
+  const md = [
+    '````md', // opens a 4-backtick fence
+    '# inside',
+    '```', // too short: still inside
+    '# still inside',
+    '```` trailing text', // has text after it: still inside
+    '````', // closes
+    '# after',
+    '~~~',
+    '```',
+    '# inside tildes', // a backtick line does not close a tilde fence
+    '~~~~',
+    '## end',
+  ].join('\n');
+  const got = [];
+  h.scanHeadings(md, (l, t) => got.push(t));
+  assert.deepEqual(got, ['after', 'end']);
+});
+
 test('parseMarkdownHeadings skips YAML front matter', () => {
   const md = '---\ntitle: T\n# not a heading\n---\n# Title\n## Section';
   assert.deepEqual(h.parseMarkdownHeadings(md), [
@@ -245,9 +271,23 @@ test('formatBytes uses decimal units and hides zero', () => {
   assert.equal(h.formatBytes(0), '');
   assert.equal(h.formatBytes(undefined), '');
   assert.equal(h.formatBytes(512), '512 B');
+  assert.equal(h.formatBytes(1_000), '1 KB');
+  assert.equal(h.formatBytes(2_500), '2.5 KB');
+  assert.equal(h.formatBytes(9_960), '10 KB');
   assert.equal(h.formatBytes(48_400), '48 KB');
   assert.equal(h.formatBytes(2_140_000), '2.1 MB');
   assert.equal(h.formatBytes(1_300_000_000), '1.3 GB');
+});
+
+test('mergeRanges merges nested, overlapping and touching ranges', () => {
+  assert.deepEqual(h.mergeRanges([]), []);
+  // a section and its own subsection, given out of order
+  assert.deepEqual(h.mergeRanges([{ start: 3, end: 5 }, { start: 1, end: 6 }]), [{ start: 1, end: 6 }]);
+  // touching sections become one range; a separate one stays separate
+  assert.deepEqual(
+    h.mergeRanges([{ start: 6, end: 9 }, { start: 1, end: 6 }, { start: 12, end: 14 }]),
+    [{ start: 1, end: 9 }, { start: 12, end: 14 }]
+  );
 });
 
 test('ancestry and labelOf build the copied path', () => {

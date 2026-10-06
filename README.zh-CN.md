@@ -24,10 +24,10 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。
 - **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
-- **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。
+- **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。
 - **右键复制**：复制标题文字，或带编号的完整路径，如 `标题 › 2  Analysis › 2.1  Summary`。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
-- **一键设置 cell 标签**：每个 notebook cell 右下角有一个 **Tags** 按钮，点击后弹出常用标签（`hide-input`、`remove-output`、`skip-execution` 等）的勾选列表，每个标签都附有简短说明，也可以输入自定义标签。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。
+- **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。
 - **安全**：从不改动你的代码、文字或输出。扩展唯一会做的修改，是你在标签选择器里修改某个 cell 的标签，并且可以用 `Cmd+Z` 撤销。
 
 Markdown 解析会跳过文件开头的 YAML front matter 和代码块，代码里的 `# 注释` 不会被当成标题。
@@ -90,9 +90,14 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 在标题上**右键**：
 
 - **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
+- **Edit Section Tags…**（编辑本节标签，仅 notebook）：为这一节（包括所有子小节）的所有代码 cell 打开标签勾选列表，比如一次给整个分析小节加上 `hide-output`。标题和文字 cell 不受影响，网页上这一节仍然可读。
 - **Copy Heading Text**（复制标题文字）、**Copy Heading Path**（复制完整路径）。
 
-给 cell 设置标签：点击 cell 右下角的 **Tags**（已有标签时显示数量），勾选或取消标签，或者输入新标签，然后按 Enter。命令面板里的 **Notebook Headings：编辑 cell 标签…** 对当前选中的 cell 做同样的事。
+用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，再在其中一个上右键：**Select Section** 会一次选中这些小节的所有 cell（嵌套或相邻的小节会自动合并，不会重复选中）；两个复制命令会按顺序每行复制一个标题；**Edit Section Tags…** 会给这些小节的所有代码 cell 设置标签。
+
+给 cell 设置标签：点击 cell 右下角的 **Tags**（已有标签时显示数量），勾选或取消标签，或者输入新标签，然后按 Enter。输入的文字会先用来筛选列表（比如输入 `hide` 会筛出 `hide-input`、`hide-output` 等）；只有匹配不到任何已有标签时，才会作为新标签添加。命令面板里的 **Notebook Headings：编辑 cell 标签…** 对当前选中的 cell 做同样的事。Markdown cell 只有已经有标签时才显示这个按钮。
+
+一次给多个 cell 设置标签：先选中这些 cell（比如用 **Select Section** 选中整节），再点击其中任意一个 cell 的 **Tags**，或者用命令面板；只给其中的代码 cell 设置标签（跳过 Markdown cell）。所有选中的 cell 都有的标签默认勾上，取消勾选就从所有 cell 上去掉；只有部分 cell 有的标签会标注"（3/10 个 cell）"，保持不勾就不改动，勾上则加到所有 cell 上。整次修改用一次 `Cmd+Z` 就能撤销。
 
 快捷键（可在"键盘快捷方式"里搜索 "Notebook Headings" 修改）：
 
@@ -115,7 +120,7 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 | `notebookHeadings.showOutputSize` | `true` | 显示 notebook 每个小节的输出总大小 |
 | `notebookHeadings.followCursor` | `true` | 目录高亮当前所在小节 |
 | `notebookHeadings.statusBar` | `true` | 状态栏显示当前小节 |
-| `notebookHeadings.cellTagButton` | `true` | 在 notebook cell 上显示 Tags 按钮 |
+| `notebookHeadings.cellTagButton` | `true` | 在代码 cell 上显示 Tags 按钮 |
 | `notebookHeadings.markdown` | `true` | 同时支持 Markdown 文件 |
 
 ### 自定义颜色

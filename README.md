@@ -42,19 +42,20 @@ you see the structure first and drill down on demand.
   highlighting; matches keep their parent headings visible.
 - **Go to Heading** (`Cmd+Alt+O` / `Ctrl+Alt+O` in a notebook or Markdown
   editor): a searchable list of all headings.
-- **Select a whole section** (right-click → **Select Section**): selects the
+- **Select whole sections** (right-click → **Select Section**): selects the
   heading's cells, or lines in Markdown, including all its subsections, so
   you can cut, copy, move, run or delete the section with VS Code's own
-  commands.
+  commands. Select several headings first (`Cmd`/`Ctrl`-click or
+  `Shift`-click) to select all their sections at once.
 - **Right-click to copy** a heading's text or its full path, e.g.
   `Title › 2  Analysis › 2.1  Summary`.
 - **English and Chinese interface.** Commands, menus, settings and messages
   follow VS Code's display language.
 - **One-click cell tags.** A **Tags** button at the bottom right of every
-  notebook cell opens a checklist of common tags (`hide-input`,
-  `remove-output`, `skip-execution`, …) with a short explanation of each, plus
-  any custom tag you type. Tags are stored where Jupyter, Jupyter Book and
-  nbconvert read them.
+  code cell opens a short checklist of the tags that collapse parts of the
+  cell behind a click-to-show toggle in Jupyter Book / MyST pages:
+  `hide-output`, `hide-input` and `hide-cell`. Any other tag can be typed in.
+  Tags are stored where Jupyter, Jupyter Book and nbconvert read them.
 - **Safe by design.** The extension never changes your code, text or outputs.
   The only edit it ever makes is a cell's tags, when you change them in the
   tag picker, and it can be undone with `Cmd+Z`.
@@ -138,12 +139,32 @@ Right-click a heading for:
   `Cmd+X` / `Cmd+V` to move it, `Cmd+C` to copy it, or run or delete the
   selected cells. If the heading shares its first cell with an earlier
   heading, that cell is selected too and the status bar says so.
+- **Edit Section Tags…** (notebooks): opens the tag checklist for every code
+  cell of the section, subsections included, e.g. to add `hide-output` to a
+  whole analysis section in one go. Heading and text cells are left alone, so
+  the section stays readable on the page.
 - **Copy Heading Text** and **Copy Heading Path**.
+
+Select several headings with `Cmd`/`Ctrl`-click or `Shift`-click, then
+right-click one of them: **Select Section** selects all their sections at once
+(nested or adjacent sections are merged, so no cell is selected twice), and the
+copy commands copy one line per heading, and **Edit Section Tags…** tags the
+code cells of all of them.
 
 To tag a cell, click **Tags** at the bottom right of the cell (it shows the
 number of tags once there are some), check or uncheck tags, or type a new one,
-then press Enter. **Notebook Headings: Edit Cell Tags…** in the command palette
-does the same for the selected cell.
+then press Enter. Typing filters the list (`hide` shows `hide-input`,
+`hide-output`, …); text that matches no listed tag is added as a new tag.
+**Notebook Headings: Edit Cell Tags…** in the command palette does the same
+for the selected cell. Markdown cells show the button only once they have
+tags.
+
+To tag several cells at once, select them first (for example with **Select
+Section**), then click **Tags** on any of them or use the command palette; the
+selected code cells are tagged (Markdown cells are skipped). A tag
+that every selected cell has starts checked (uncheck it to remove it from all);
+a tag that only some cells have is marked "3/10 cells" and stays as it is
+unless you check it (which adds it to all). The whole change is one `Cmd+Z`.
 
 Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 "Notebook Headings"):
@@ -165,7 +186,7 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.showOutputSize` | `true` | Show the total output size of each notebook section. |
 | `notebookHeadings.followCursor` | `true` | Highlight the current section in the tree. |
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
-| `notebookHeadings.cellTagButton` | `true` | Show the Tags button on notebook cells. |
+| `notebookHeadings.cellTagButton` | `true` | Show the Tags button on code cells. |
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |
 
 ### Custom colors

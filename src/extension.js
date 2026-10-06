@@ -9,7 +9,7 @@
  *   - keep the tree, the status bar and the editor in sync (clicks, cursor
  *     moves, scrolling, edits, settings changes),
  *   - provide the commands contributed in package.json,
- *   - offer a "Tags" button on every notebook cell for editing its tags.
+ *   - offer a "Tags" button on notebook code cells for editing their tags.
  *
  * The only change ever made to a document is a cell's tags, and only when
  * the user edits them in the tag picker (undoable with Cmd+Z). Code, text and
@@ -29,10 +29,11 @@ const {
   applyFilter,
   headingAt,
   sectionRange,
+  mergeRanges,
   ancestry,
   labelOf,
 } = require('./headings');
-const { COMMON_TAGS, isValidTag, nextTags, pickerEntries, sortKeysDeep } = require('./tags');
+const { COMMON_TAGS, isValidTag, multiPickerEntries, nextTagsMulti, sortKeysDeep } = require('./tags');
 
 /** Id of the tree view (must match `contributes.views` in package.json). */
 const VIEW_ID = 'notebookHeadings.view';
@@ -140,8 +141,8 @@ function cursorPos(source) {
 /**
  * Bytes of output stored in a notebook cell. The outputs are already in
  * memory as byte arrays, so this only adds up their lengths; output content
- * is never parsed. (About 0.2 ms for a 3,000-cell notebook with 31 MB of
- * output.)
+ * is never parsed, which takes well under a millisecond even for notebooks
+ * with thousands of cells.
  */
 function cellOutputBytes(cell) {
   let bytes = 0;
@@ -196,19 +197,49 @@ function getCellTags(cell) {
   return Array.isArray(tags) ? [...tags] : [];
 }
 
-/** Replace a cell's tags with one undoable edit; other metadata is kept. */
-async function setCellTags(cell, tags) {
+/** A cell's metadata with its tags replaced; everything else is kept. */
+function metadataWithTags(cell, tags) {
   const md = JSON.parse(JSON.stringify(cell.metadata || {}));
   const holder = useCustomMetadata() ? ((md.custom = md.custom || {}), md.custom) : md;
   holder.metadata = holder.metadata || {};
   if (tags.length) holder.metadata.tags = tags;
   else delete holder.metadata.tags;
+  return sortKeysDeep(md);
+}
+
+/**
+ * Replace the tags of one or more cells of a notebook in a single
+ * WorkspaceEdit, so one Cmd+Z undoes the whole change.
+ *
+ * @param {{ cell: object, tags: string[] }[]} changes
+ */
+async function setCellTags(changes) {
+  if (!changes.length) return false;
   const edit = new vscode.WorkspaceEdit();
-  edit.set(cell.notebook.uri, [vscode.NotebookEdit.updateCellMetadata(cell.index, sortKeysDeep(md))]);
+  edit.set(
+    changes[0].cell.notebook.uri,
+    changes.map(({ cell, tags }) => vscode.NotebookEdit.updateCellMetadata(cell.index, metadataWithTags(cell, tags)))
+  );
   return vscode.workspace.applyEdit(edit);
 }
 
-/** The "Tags" button at the bottom right of every notebook cell. */
+/** Whether a notebook cell is a code cell (not Markdown). */
+const isCodeCell = (cell) => cell.kind === vscode.NotebookCellKind.Code;
+
+/** Cells covered by a notebook editor's selections, in order, without repeats. */
+function selectedCells(editor) {
+  if (!editor) return [];
+  const seen = new Set();
+  const cells = [];
+  for (const r of editor.selections || (editor.selection ? [editor.selection] : [])) {
+    for (let i = r.start; i < Math.min(r.end, editor.notebook.cellCount); i++) {
+      if (!seen.has(i)) seen.add(i), cells.push(editor.notebook.cellAt(i));
+    }
+  }
+  return cells.sort((a, b) => a.index - b.index);
+}
+
+/** The "Tags" button at the bottom right of code cells (and of tagged Markdown cells). */
 class CellTagButton {
   constructor() {
     this._onDidChange = new vscode.EventEmitter();
@@ -222,6 +253,9 @@ class CellTagButton {
   provideCellStatusBarItems(cell) {
     if (!config().get('cellTagButton', true)) return [];
     const tags = getCellTags(cell);
+    // The offered tags collapse code and outputs, so the button belongs on code
+    // cells; a Markdown cell shows it only when it already has tags to edit.
+    if (cell.kind !== vscode.NotebookCellKind.Code && !tags.length) return [];
     return [
       {
         text: tags.length ? `$(tag) ${tags.length}` : `$(tag) ${t('Tags')}`,
@@ -272,6 +306,8 @@ class HeadingsProvider {
     this.source = undefined;
     this.roots = [];
     this.flat = [];
+    /** tree item id -> heading node, rebuilt with the tree */
+    this.byId = new Map();
     this.filter = '';
     /** document uri -> counter bumped by "Collapse to Default Level" */
     this.generations = new Map();
@@ -281,6 +317,8 @@ class HeadingsProvider {
 
   setSource(source) {
     this.source = source;
+    // Lets package.json show notebook-only menu items (Edit Section Tags).
+    vscode.commands.executeCommand('setContext', 'notebookHeadings.isNotebook', !!source && source.kind === 'notebook');
     this.rebuild();
   }
 
@@ -308,11 +346,13 @@ class HeadingsProvider {
     if (!src) {
       this.roots = [];
       this.flat = [];
+      this.byId = new Map();
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
       const { headings, total, cellBytes } = readSource(src);
       ({ roots: this.roots, flat: this.flat } = buildTree(headings, prefix, total));
+      this.byId = new Map(this.flat.map((n) => [n.id, n]));
       if (cellBytes) assignOutputSizes(this.flat, cellBytes);
       assignNumbers(this.roots, config().get('numberH1', false));
       assignColorRanks(this.flat);
@@ -428,7 +468,13 @@ function activate(context) {
   const provider = new HeadingsProvider();
   const decorations = new LevelDecorations();
   const tagButton = new CellTagButton();
-  const view = vscode.window.createTreeView(VIEW_ID, { treeDataProvider: provider, showCollapseAll: false });
+  // canSelectMany: Cmd/Ctrl-click and Shift-click select several headings,
+  // which Select Section and the copy commands then act on together.
+  const view = vscode.window.createTreeView(VIEW_ID, {
+    treeDataProvider: provider,
+    showCollapseAll: false,
+    canSelectMany: true,
+  });
 
   const status = vscode.window.createStatusBarItem('notebookHeadings.status', vscode.StatusBarAlignment.Left, 50);
   status.name = t('Notebook Headings: Current Section');
@@ -448,23 +494,51 @@ function activate(context) {
     status.show();
   };
 
-  /** Select the section of `pos` in the tree (or its visible ancestor). */
-  const follow = (pos) => {
+  /**
+   * Time until which scroll events are ignored: clicking a heading scrolls
+   * the editor, and following that scroll would re-select a (often
+   * different) heading in the tree, breaking Cmd/Shift-click multi-selection.
+   */
+  let ignoreScrollUntil = 0;
+  const quietScroll = () => {
+    ignoreScrollUntil = Date.now() + 1000;
+  };
+
+  /**
+   * Select the section of `pos` in the tree (or its visible ancestor).
+   *
+   * @param {number} pos cell index or line
+   * @param {boolean} [userMoved] the user moved the cursor in the editor
+   *        (not a scroll, an edit, or a selection this extension made)
+   */
+  const follow = (pos, userMoved = false) => {
     if (pos === undefined || !view.visible || !config().get('followCursor', true)) return;
+    // Don't replace a multi-selection the user built in the tree because of a
+    // scroll or an edit; once they move the cursor in the editor themselves,
+    // following resumes.
+    const multi = view.selection && view.selection.length > 1;
+    if (!userMoved && multi) return;
     const node = provider.visibleHeadingAt(pos);
-    if (!node || node === lastRevealed) return;
+    // Skip a repeat reveal, except when it collapses a multi-selection back
+    // to the heading under the user's cursor.
+    if (!node || (node === lastRevealed && !multi)) return;
     lastRevealed = node;
     // focus: false keeps keyboard focus in the editor; expand: false never
     // opens collapsed sections. Errors (e.g. a stale node) are harmless.
     view.reveal(node, { select: true, focus: false, expand: false }).then(undefined, () => {});
   };
 
-  const onPosition = (pos) => {
+  const onPosition = (pos, userMoved = false) => {
     updateStatus(pos);
-    follow(pos);
+    follow(pos, userMoved);
   };
+  /** Cursor moved in the editor: by the user, unless we just moved it. */
+  const onCursor = (pos) => onPosition(pos, Date.now() >= ignoreScrollUntil);
   /** Scrolling fires many events; only react once it settles. */
-  const onScroll = debounce(onPosition, 150);
+  const onScroll = debounce((pos) => {
+    if (Date.now() < ignoreScrollUntil) updateStatus(pos);
+    else onPosition(pos);
+  }, 150);
 
   /** Typing fires many change events; re-parse once it pauses. */
   const scheduleRebuild = debounce(() => {
@@ -547,8 +621,12 @@ function activate(context) {
    */
   const revealHeading = async (node, focusEditor = false) => {
     const src = provider.source;
-    if (!src) return;
+    if (!src || !node) return;
+    // Use the current position even if the tree or the Go to Heading list was
+    // built before an edit.
+    node = provider.byId.get(node.id) || node;
     lastRevealed = node;
+    quietScroll();
     if (src.kind === 'notebook') {
       if (node.pos >= src.doc.cellCount) return; // stale node after an edit
       const range = new vscode.NotebookRange(node.pos, node.pos + 1);
@@ -602,72 +680,95 @@ function activate(context) {
   };
 
   /**
-   * "Select Section": select every cell (or line) of a heading's section in
-   * the editor and move focus there, so the user can cut, copy, move, run or
-   * delete it with VS Code's own commands. Nothing is changed here.
+   * The headings a tree command should act on, in document order. VS Code
+   * passes the right-clicked heading and the current multi-selection; when the
+   * right-clicked heading is not part of that selection, only it counts.
    */
-  const selectSection = async (node) => {
+  const targetsOf = (node, selected) => {
+    const sameNode = (a, b) => a === b || (a && b && a.id === b.id);
+    const list =
+      Array.isArray(selected) && selected.length && selected.some((n) => sameNode(n, node)) ? selected : node ? [node] : [];
+    // After an edit the tree is rebuilt, but VS Code may still hand back the
+    // old heading objects; look each one up again by id so positions are
+    // current, and drop headings that no longer exist.
+    const fresh = list.map((n) => (provider.byId && provider.byId.get(n.id)) || null).filter(Boolean);
+    return [...new Set(fresh)].sort((a, b) => provider.flat.indexOf(a) - provider.flat.indexOf(b));
+  };
+
+  /**
+   * "Select Section": select every cell (or line) of one or more headings'
+   * sections in the editor and move focus there, so the user can cut, copy,
+   * move, run or delete them with VS Code's own commands. Overlapping or
+   * adjacent sections are merged. Nothing is changed here.
+   */
+  const selectSection = async (node, selected) => {
     const src = provider.source;
-    if (!src || !node) return;
-    const { start, end, sharedWith } = sectionRange(provider.flat, node);
-    lastRevealed = node;
-    let what;
+    const nodes = targetsOf(node, selected);
+    if (!src || !nodes.length) return;
+    const parts = nodes.map((n) => sectionRange(provider.flat, n));
+    const ranges = mergeRanges(parts);
+    lastRevealed = nodes[0];
+    quietScroll();
+    let count;
     if (src.kind === 'notebook') {
-      if (end > src.doc.cellCount) return; // stale node after an edit
-      const range = new vscode.NotebookRange(start, end);
+      if (ranges.some((r) => r.end > src.doc.cellCount)) return; // stale nodes after an edit
       const editor = await vscode.window.showNotebookDocument(src.doc, {
         viewColumn: src.editor.viewColumn,
-        selections: [range],
+        selections: ranges.map((r) => new vscode.NotebookRange(r.start, r.end)),
         preserveFocus: false,
       });
-      editor.revealRange(new vscode.NotebookRange(start, start + 1), vscode.NotebookEditorRevealType.AtTop);
-      what = cellsText(end - start);
+      editor.revealRange(new vscode.NotebookRange(ranges[0].start, ranges[0].start + 1), vscode.NotebookEditorRevealType.AtTop);
+      count = cellsText(ranges.reduce((s, r) => s + r.end - r.start, 0));
     } else {
-      if (start >= src.doc.lineCount) return;
+      if (ranges[0].start >= src.doc.lineCount) return;
       const editor = await vscode.window.showTextDocument(src.doc, {
         viewColumn: src.editor.viewColumn,
         preserveFocus: false,
       });
-      // End at the start of the next section's line, or at the very end of
-      // the file, so the selection covers whole lines.
-      const last = Math.min(end, src.doc.lineCount);
-      const to = last < src.doc.lineCount ? new vscode.Position(last, 0) : src.doc.lineAt(last - 1).range.end;
-      editor.selection = new vscode.Selection(new vscode.Position(start, 0), to);
-      editor.revealRange(new vscode.Range(start, 0, start, 0), vscode.TextEditorRevealType.AtTop);
-      what = linesText(last - start);
+      // Each range ends at the start of the next section's line, or at the
+      // very end of the file, so the selections cover whole lines.
+      let lines = 0;
+      editor.selections = ranges.map((r) => {
+        const last = Math.min(r.end, src.doc.lineCount);
+        lines += last - r.start;
+        const to = last < src.doc.lineCount ? new vscode.Position(last, 0) : src.doc.lineAt(last - 1).range.end;
+        return new vscode.Selection(new vscode.Position(r.start, 0), to);
+      });
+      editor.revealRange(new vscode.Range(ranges[0].start, 0, ranges[0].start, 0), vscode.TextEditorRevealType.AtTop);
+      count = linesText(lines);
     }
-    const shared = sharedWith.length ? t(' (its first cell also holds "{0}")', truncate(sharedWith[0].text, 30)) : '';
-    vscode.window.setStatusBarMessage(
-      `$(selection) ${t('Selected {0} of "{1}"', what, truncate(node.text, 40))}${shared}`,
-      6000
-    );
+    // Warn about a shared first cell only when it starts a selected block; a
+    // cell inside a larger selected section is selected anyway.
+    const shared = parts.find((p) => p.sharedWith.length && ranges.some((r) => r.start === p.start));
+    const note = shared ? t(' (its first cell also holds "{0}")', truncate(shared.sharedWith[0].text, 30)) : '';
+    const msg =
+      nodes.length === 1
+        ? t('Selected {0} of "{1}"', count, truncate(nodes[0].text, 40))
+        : t('Selected {0} in {1} sections', count, nodes.length);
+    vscode.window.setStatusBarMessage(`$(selection) ${msg}${note}`, 6000);
   };
 
   /**
-   * Tag picker for one cell: common tags with descriptions, the cell's other
-   * tags, and a custom tag typed into the box. Opened from the cell's Tags
-   * button (cell passed in) or the command palette (the selected cell).
+   * The tag picker for a list of cells (one or many). With several cells, a
+   * tag on only some of them starts unchecked and is left as is unless it is
+   * checked; see nextTagsMulti() in src/tags.js. All changes are applied as
+   * one undoable edit.
+   *
+   * @param {object[]} cells notebook cells, in order
+   * @param {string} [title] picker title; defaults to "Tags for cell N"
    */
-  const editCellTags = async (cell) => {
-    if (!cell || !cell.notebook) {
-      const ed = vscode.window.activeNotebookEditor;
-      cell = ed && ed.selection && ed.selection.start < ed.notebook.cellCount ? ed.notebook.cellAt(ed.selection.start) : undefined;
-    }
-    if (!cell) {
-      vscode.window.showInformationMessage(t('Notebook Headings: select a notebook cell first.'));
-      return;
-    }
-    const current = getCellTags(cell);
+  const openTagPicker = (cells, title) => {
+    const lists = cells.map(getCellTags);
+    const total = cells.length;
     const qp = vscode.window.createQuickPick();
     qp.canSelectMany = true;
-    qp.title = t('Tags for cell {0}', cell.index + 1);
-    qp.placeholder = t('Check or uncheck tags, or type a new tag, then press Enter');
-    qp.items = pickerEntries(current).map((e) => ({
-      label: e.tag,
-      description: e.custom ? t('custom tag') : t(COMMON_TAGS.find((c) => c.tag === e.tag).description),
-      tag: e.tag,
-      picked: e.picked,
-    }));
+    qp.title = title || t('Tags for cell {0}', cells[0].index + 1);
+    qp.placeholder = t('Check tags, then OK · type to add a new one');
+    qp.items = multiPickerEntries(lists).map((e) => {
+      const base = e.custom ? t('custom') : t(COMMON_TAGS.find((c) => c.tag === e.tag).description);
+      const partial = total > 1 && e.count > 0 && e.count < total ? t(' · {0}/{1} cells', e.count, total) : '';
+      return { label: e.tag, description: base + partial, tag: e.tag, picked: e.picked };
+    });
     qp.selectedItems = qp.items.filter((i) => i.picked);
     qp.onDidAccept(async () => {
       const typed = qp.value.trim();
@@ -676,29 +777,93 @@ function activate(context) {
         return;
       }
       const checked = qp.items.filter((i) => qp.selectedItems.includes(i)).map((i) => i.tag);
-      // A typed name that matches an offered tag means "check it".
-      const extra = typed && qp.items.some((i) => i.tag === typed) ? '' : typed;
-      if (typed && !extra && !checked.includes(typed)) checked.push(typed);
-      const tags = nextTags(current, checked, extra);
+      // The typed text is a filter while it still matches offered tags (e.g.
+      // "hide" to find hide-input/hide-output); it becomes a new tag only when
+      // it matches none of them. An exact name means "check that tag".
+      const exact = typed && qp.items.some((i) => i.tag === typed);
+      const filtering = typed && !exact && qp.items.some((i) => i.tag.toLowerCase().includes(typed.toLowerCase()));
+      const extra = typed && !exact && !filtering ? typed : '';
+      if (exact && !checked.includes(typed)) checked.push(typed);
+      const next = nextTagsMulti(lists, checked, extra);
       qp.hide();
-      if (tags.join('\n') === current.join('\n')) return;
-      if (await setCellTags(cell, tags)) {
+      const changes = cells
+        .map((cell, i) => ({ cell, tags: next[i], changed: next[i].join('\n') !== lists[i].join('\n') }))
+        .filter((c) => c.changed);
+      if (!changes.length) return;
+      if (await setCellTags(changes)) {
         tagButton.refresh();
-        vscode.window.setStatusBarMessage(
-          `$(tag) ${tags.length ? t('Cell {0} tags: {1}', cell.index + 1, tags.join(', ')) : t('Cell {0}: tags removed', cell.index + 1)}`,
-          4000
-        );
+        let text;
+        if (total > 1) text = t('Tags updated on {0} of {1} code cells', changes.length, total);
+        else if (next[0].length) text = t('Cell {0} tags: {1}', cells[0].index + 1, next[0].join(', '));
+        else text = t('Cell {0}: tags removed', cells[0].index + 1);
+        vscode.window.setStatusBarMessage(`$(tag) ${text}`, 4000);
       }
     });
     qp.onDidHide(() => qp.dispose());
     qp.show();
   };
 
+  /**
+   * "Edit Cell Tags": from a cell's Tags button (that cell, or every selected
+   * code cell when it is part of a multi-cell selection) or from the command
+   * palette (the selected cells; only code cells when several are selected).
+   */
+  const editCellTags = async (clicked) => {
+    const fromButton = !!(clicked && clicked.notebook);
+    const editor =
+      vscode.window.visibleNotebookEditors.find((e) => fromButton && e.notebook === clicked.notebook) ||
+      vscode.window.activeNotebookEditor;
+    const selection = editor && (!fromButton || editor.notebook === clicked.notebook) ? selectedCells(editor) : [];
+    let cells;
+    if (fromButton) {
+      // A Markdown cell's own button (shown only when it has tags) edits just that cell.
+      const inSelection = selection.length > 1 && selection.some((c) => c.index === clicked.index);
+      cells = isCodeCell(clicked) && inSelection ? selection : [clicked];
+    } else cells = selection;
+    // With several cells, only code cells are tagged: collapse tags on Markdown
+    // cells would fold headings and text in Jupyter Book pages.
+    if (cells.length > 1) cells = cells.filter(isCodeCell);
+    if (!cells.length) {
+      vscode.window.showInformationMessage(t('Notebook Headings: select a notebook cell first.'));
+      return;
+    }
+    openTagPicker(cells, cells.length > 1 ? t('Tags for {0} selected code cells', cells.length) : undefined);
+  };
+
+  /**
+   * "Edit Section Tags": right-click one or more headings in the tree to tag
+   * every code cell of their sections, subsections included.
+   */
+  const editSectionTags = (node, selected) => {
+    const src = provider.source;
+    const nodes = targetsOf(node, selected);
+    if (!src || src.kind !== 'notebook' || !nodes.length) return;
+    const ranges = mergeRanges(nodes.map((n) => sectionRange(provider.flat, n)));
+    // Only code cells: the heading and text cells stay visible on the page.
+    const cells = [];
+    for (const r of ranges) {
+      for (let i = r.start; i < Math.min(r.end, src.doc.cellCount); i++) {
+        const cell = src.doc.cellAt(i);
+        if (isCodeCell(cell)) cells.push(cell);
+      }
+    }
+    if (!cells.length) {
+      vscode.window.showInformationMessage(t('Notebook Headings: this section has no code cells.'));
+      return;
+    }
+    const count = cells.length === 1 ? t('1 code cell') : t('{0} code cells', cells.length);
+    const title =
+      nodes.length === 1
+        ? t('Tags for "{0}" · {1}', truncate(nodes[0].text, 40), count)
+        : t('Tags for {0} sections · {1}', nodes.length, count);
+    openTagPicker(cells, title);
+  };
+
   /** Copy to the clipboard with a short status bar confirmation. */
   const copy = async (text) => {
     if (!text) return;
     await vscode.env.clipboard.writeText(text);
-    vscode.window.setStatusBarMessage(`$(check) ${t('Copied: {0}', truncate(text, 60))}`, 2500);
+    vscode.window.setStatusBarMessage(`$(check) ${t('Copied: {0}', truncate(text.replace(/\n/g, ' · '), 60))}`, 2500);
   };
 
   // --- wiring ---------------------------------------------------------------------------
@@ -726,13 +891,13 @@ function activate(context) {
 
     // Cursor and scroll position.
     vscode.window.onDidChangeNotebookEditorSelection((e) => {
-      if (isSourceDoc(e.notebookEditor.notebook) && e.selections.length) onPosition(e.selections[0].start);
+      if (isSourceDoc(e.notebookEditor.notebook) && e.selections.length) onCursor(e.selections[0].start);
     }),
     vscode.window.onDidChangeNotebookEditorVisibleRanges((e) => {
       if (isSourceDoc(e.notebookEditor.notebook) && e.visibleRanges.length) onScroll(e.visibleRanges[0].start);
     }),
     vscode.window.onDidChangeTextEditorSelection((e) => {
-      if (isSourceDoc(e.textEditor.document) && e.selections.length) onPosition(e.selections[0].active.line);
+      if (isSourceDoc(e.textEditor.document) && e.selections.length) onCursor(e.selections[0].active.line);
     }),
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (isSourceDoc(e.textEditor.document) && e.visibleRanges.length) onScroll(e.visibleRanges[0].start.line);
@@ -740,6 +905,9 @@ function activate(context) {
 
     // Edits.
     vscode.workspace.onDidChangeNotebookDocument((e) => {
+      // Tags changed by undo/redo, another extension or a reverted file:
+      // redraw the Tags buttons so their counts stay right.
+      if (e.cellChanges.some((c) => c.metadata)) tagButton.refresh();
       if (isSourceDoc(e.notebook)) scheduleRebuild();
     }),
     vscode.workspace.onDidChangeTextDocument((e) => {
@@ -776,9 +944,13 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.refresh', () => provider.rebuild()),
     vscode.commands.registerCommand('notebookHeadings.selectSection', selectSection),
     vscode.commands.registerCommand('notebookHeadings.editCellTags', editCellTags),
-    vscode.commands.registerCommand('notebookHeadings.copyTitle', (node) => copy(node && node.text)),
-    vscode.commands.registerCommand('notebookHeadings.copyPath', (node) =>
-      copy(node && ancestry(node).map(label).join(' › '))
+    vscode.commands.registerCommand('notebookHeadings.editSectionTags', editSectionTags),
+    // With several headings selected, copy one line per heading.
+    vscode.commands.registerCommand('notebookHeadings.copyTitle', (node, selected) =>
+      copy(targetsOf(node, selected).map((n) => n.text).join('\n'))
+    ),
+    vscode.commands.registerCommand('notebookHeadings.copyPath', (node, selected) =>
+      copy(targetsOf(node, selected).map((n) => ancestry(n).map(label).join(' › ')).join('\n'))
     ),
 
     // Pending timers must not fire after deactivation.

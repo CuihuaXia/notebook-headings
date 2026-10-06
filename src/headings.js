@@ -37,14 +37,19 @@
 
 /**
  * An ATX heading: up to three spaces of indentation, 1–6 `#`, at least one
- * space or tab, the text, and an optional closing run of `#`. (Four or more
- * spaces of indentation is an indented code block in CommonMark, so those
- * lines are deliberately not matched.)
+ * space or tab, the text, and an optional closing run of `#`. As in
+ * CommonMark, the closing run only counts when a space precedes it, so
+ * "## Learn C#" keeps its "#". (Four or more spaces of indentation is an
+ * indented code block, so those lines are deliberately not matched.)
  */
-const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/;
+const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/;
 
-/** Opening or closing line of a fenced code block (``` or ~~~, 3 or more). */
-const FENCE_RE = /^[ \t]*(`{3,}|~{3,})/;
+/**
+ * A code fence line: ``` or ~~~ (3 or more) and whatever follows. A fence is
+ * closed only by the same character, at least as many of them, and nothing
+ * else on the line, so a ``` line inside a ```` block does not end it.
+ */
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 /** Closing line of a YAML front matter block. */
 const FRONT_MATTER_END_RE = /^(---|\.\.\.)\s*$/;
@@ -86,7 +91,7 @@ function cleanText(s) {
  */
 function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
   const lines = text.split(/\r?\n/);
-  let fence = null; // '`' or '~' while inside a fenced code block
+  let fence = null; // the opening fence (e.g. "````") while inside a code block
   let start = 0;
 
   if (frontMatter && lines[0] !== undefined && lines[0].trim() === '---') {
@@ -97,12 +102,15 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
     const f = line.match(FENCE_RE);
-    if (f) {
-      if (!fence) fence = f[1][0];
-      else if (f[1][0] === fence) fence = null;
+    if (!fence && f) {
+      fence = f[1];
       continue;
     }
-    if (fence) continue;
+    if (fence) {
+      const closes = f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim();
+      if (closes) fence = null;
+      continue;
+    }
     const m = line.match(HEADING_RE);
     if (m) onHeading(m[1].length, cleanText(m[2]), i);
   }
@@ -236,7 +244,7 @@ function assignOutputSizes(flat, cellBytes) {
 
 /**
  * Human-readable size with decimal units, as macOS Finder shows them:
- * "", "512 B", "48 KB", "2.1 MB", "1.3 GB". Zero gives an empty string so
+ * "", "512 B", "2.5 KB", "48 KB", "2.1 MB", "1.3 GB". Zero gives an empty string so
  * sections without outputs show nothing.
  *
  * @param {number} bytes
@@ -245,6 +253,8 @@ function assignOutputSizes(flat, cellBytes) {
 function formatBytes(bytes) {
   if (!bytes) return '';
   if (bytes < 1000) return `${bytes} B`;
+  // One decimal below 10 KB (2.5 KB), whole numbers above (48 KB); "1.0" → "1".
+  if (bytes < 1e4) return `${(bytes / 1e3).toFixed(1).replace(/\.0$/, '')} KB`;
   if (bytes < 1e6) return `${Math.round(bytes / 1e3)} KB`;
   if (bytes < 1e9) return `${(bytes / 1e6).toFixed(1)} MB`;
   return `${(bytes / 1e9).toFixed(1)} GB`;
@@ -340,6 +350,26 @@ function sectionRange(flat, node) {
 }
 
 /**
+ * Merge `[start, end)` ranges into the fewest non-overlapping ones, sorted by
+ * start. Ranges that overlap (a section and one of its subsections) or touch
+ * (one section ends where the next begins) become one range, so selecting
+ * several sections never selects a cell twice.
+ *
+ * @param {{ start: number, end: number }[]} ranges
+ * @returns {{ start: number, end: number }[]}
+ */
+function mergeRanges(ranges) {
+  const sorted = ranges.map((r) => ({ start: r.start, end: r.end })).sort((a, b) => a.start - b.start);
+  const out = [];
+  for (const r of sorted) {
+    const last = out[out.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else out.push(r);
+  }
+  return out;
+}
+
+/**
  * The chain of headings from the top level down to `node` (inclusive).
  *
  * @param {object} node
@@ -375,6 +405,7 @@ module.exports = {
   applyFilter,
   headingAt,
   sectionRange,
+  mergeRanges,
   ancestry,
   labelOf,
 };

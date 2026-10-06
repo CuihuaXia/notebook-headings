@@ -2,26 +2,22 @@
  * tags.js — the pure logic of the cell tag picker.
  *
  * No `vscode` dependency, so it is unit-tested with plain Node. The VS Code
- * side (src/extension.js) reads a cell's tags, shows the picker built from
- * COMMON_TAGS, and writes back the list computed by nextTags().
+ * side (src/extension.js) reads the tags of one or more cells, shows the
+ * picker built by multiPickerEntries(), and writes back the lists computed by
+ * nextTagsMulti(); a single cell is simply a list of one.
  */
 'use strict';
 
 /**
- * Tags offered in the picker, in display order, with an English description
- * (translated at runtime through vscode.l10n). Most are understood by
- * Jupyter Book / MyST and nbconvert; `parameters` is Papermill's.
+ * Tags offered in the picker, each with a short English description
+ * (translated at runtime through vscode.l10n). They collapse parts of a cell
+ * behind a click-to-show toggle in Jupyter Book / MyST pages. Any other tag a
+ * cell already has is still listed (as "custom"), and new ones can be typed in.
  */
 const COMMON_TAGS = [
-  { tag: 'hide-input', description: 'Jupyter Book / MyST: code collapsed behind a toggle' },
-  { tag: 'hide-output', description: 'Jupyter Book / MyST: output collapsed behind a toggle' },
-  { tag: 'hide-cell', description: 'Jupyter Book / MyST: whole cell collapsed behind a toggle' },
-  { tag: 'remove-input', description: 'Jupyter Book / MyST: code removed from the page' },
-  { tag: 'remove-output', description: 'Jupyter Book / MyST: output removed from the page' },
-  { tag: 'remove-cell', description: 'Jupyter Book / MyST: whole cell removed from the page' },
-  { tag: 'skip-execution', description: 'Skipped when the book executes the notebook' },
-  { tag: 'raises-exception', description: 'Expected to raise an error; execution continues' },
-  { tag: 'parameters', description: 'Papermill: the parameters cell' },
+  { tag: 'hide-output', description: 'collapse output' },
+  { tag: 'hide-input', description: 'collapse code (output stays)' },
+  { tag: 'hide-cell', description: 'collapse code and output' },
 ];
 
 /**
@@ -36,41 +32,49 @@ function isValidTag(name) {
 }
 
 /**
- * The cell's new tag list after the picker closes.
+ * Picker entries for several cells at once. A tag on every cell starts
+ * checked; a tag on only some cells starts unchecked and reports how many
+ * cells have it (`count`), so leaving it unchecked can mean "keep as is".
  *
- * - Tags that stay checked keep their original order.
- * - Newly checked tags are appended in the picker's order.
- * - A typed tag (if valid and not already present) is appended last.
- *
- * Every current tag is offered in the picker, so unchecking it removes it.
- *
- * @param {string[]} current tags on the cell now
- * @param {string[]} checked tags checked in the picker, in picker order
- * @param {string} [typed] text typed into the picker (a custom tag)
- * @returns {string[]}
+ * @param {string[][]} tagLists the current tags of each selected cell
+ * @returns {{ tag: string, description: string, custom: boolean, picked: boolean, count: number }[]}
  */
-function nextTags(current, checked, typed = '') {
-  const keep = current.filter((t) => checked.includes(t));
-  const added = checked.filter((t) => !current.includes(t));
-  const result = [...keep, ...added];
-  const custom = typed.trim();
-  if (isValidTag(custom) && !result.includes(custom)) result.push(custom);
-  return result;
+function multiPickerEntries(tagLists) {
+  const total = tagLists.length;
+  const countOf = (tag) => tagLists.filter((tags) => tags.includes(tag)).length;
+  const seen = [];
+  for (const tags of tagLists) for (const t of tags) if (!seen.includes(t)) seen.push(t);
+  const entry = (tag, description, custom) => {
+    const count = countOf(tag);
+    return { tag, description, custom, picked: count === total && total > 0, count };
+  };
+  const common = COMMON_TAGS.map((c) => entry(c.tag, c.description, false));
+  const extra = seen.filter((t) => !COMMON_TAGS.some((c) => c.tag === t)).map((t) => entry(t, '', true));
+  return [...common, ...extra];
 }
 
 /**
- * Picker entries: the common tags first, then any other tags the cell already
- * has (so they can be unchecked), each marked as checked or not.
+ * New tag lists for several cells after the picker closes:
+ * - a checked tag is added to every cell that lacks it;
+ * - an unchecked tag that every cell had is removed from every cell;
+ * - an unchecked tag that only some cells had is left exactly as it was;
+ * - a typed tag (if valid) is added to every cell.
+ * Each cell keeps its existing tag order; additions are appended.
  *
- * @param {string[]} current tags on the cell now
- * @returns {{ tag: string, description: string, custom: boolean, picked: boolean }[]}
+ * @param {string[][]} tagLists current tags per cell
+ * @param {string[]} checked tags checked in the picker, in picker order
+ * @param {string} [typed] text typed into the picker
+ * @returns {string[][]}
  */
-function pickerEntries(current) {
-  const common = COMMON_TAGS.map((c) => ({ ...c, custom: false, picked: current.includes(c.tag) }));
-  const extra = current
-    .filter((t) => !COMMON_TAGS.some((c) => c.tag === t))
-    .map((t) => ({ tag: t, description: '', custom: true, picked: true }));
-  return [...common, ...extra];
+function nextTagsMulti(tagLists, checked, typed = '') {
+  const onAll = (tag) => tagLists.length > 0 && tagLists.every((tags) => tags.includes(tag));
+  const custom = typed.trim();
+  const add = [...checked];
+  if (isValidTag(custom) && !add.includes(custom)) add.push(custom);
+  return tagLists.map((tags) => {
+    const kept = tags.filter((t) => checked.includes(t) || !onAll(t));
+    return [...kept, ...add.filter((t) => !kept.includes(t))];
+  });
 }
 
 /**
@@ -93,4 +97,4 @@ function sortKeysDeep(value) {
   return value;
 }
 
-module.exports = { COMMON_TAGS, isValidTag, nextTags, pickerEntries, sortKeysDeep };
+module.exports = { COMMON_TAGS, isValidTag, multiPickerEntries, nextTagsMulti, sortKeysDeep };
