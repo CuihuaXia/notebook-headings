@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.5.0 — 2026-10-08
+
+- **Status marks**: right-click a heading → **Set Status…** to mark it TODO,
+  In progress, To check or Finished. The heading's level shape turns into a
+  filled, colored status icon. Headings containing `???` show as In progress
+  automatically (setting `notebookHeadings.inProgressMarkers`).
+- **Stars**: **Add Star** puts a gold star icon before a heading (a small star
+  over its status icon, if it has one) and lists it in a **Starred** group at
+  the top of the view.
+- **Summaries**: every parent shows the marks below it, at any depth, after
+  its cell count, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check,
+  ✓ Finished, ★ starred), so they stay visible when the section is collapsed.
+  First-level sections also show a 2×2 grid of small status icons for every
+  status they hold.
+- **Show Marked Headings** (bookmark button in the toolbar): only starred
+  headings and open statuses, with their parents.
+- Marks are saved in the metadata of the heading's cell, so they travel with
+  the notebook; each change is one undoable edit.
+- **Copy Section Reference** (right-click a heading): copies the file, heading
+  path and cell range, e.g.
+  `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · cells 12–30` (line
+  range for Markdown), one line per selected heading. AI chat tools such as
+  Claude Code see selected text but not selected cells; paste this to tell
+  them which section you mean.
+- **Copy Section Content**: a section's cells as plain text, code cells fenced
+  with their language.
+- The Filter Headings button now shows a funnel instead of a magnifier.
+- Removed **Copy Heading Path** (Copy Section Reference includes the full
+  path) and the **Refresh** command (the view updates by itself).
+
 ## 1.4.0 — 2026-10-06
 
 - **Select several sections at once**: the headings view now supports

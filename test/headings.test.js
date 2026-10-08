@@ -93,16 +93,16 @@ test('parseMarkdownHeadings: unterminated front matter is content', () => {
   assert.deepEqual(h.parseMarkdownHeadings('---\n# Title'), [{ level: 1, text: 'Title', pos: 1 }]);
 });
 
-test('parseNotebookHeadings reads markdown cells only, pos = cell index', () => {
+test('parseNotebookHeadings reads markdown cells only, pos = cell index, slot = index in cell', () => {
   const cells = [
     { isMarkdown: true, text: '# Title' },
     { isMarkdown: false, text: '# a code comment' },
     { isMarkdown: true, text: '## A\n\n### A.1' },
   ];
   assert.deepEqual(h.parseNotebookHeadings(cells), [
-    { level: 1, text: 'Title', pos: 0 },
-    { level: 2, text: 'A', pos: 2 },
-    { level: 3, text: 'A.1', pos: 2 },
+    { level: 1, text: 'Title', pos: 0, slot: 0 },
+    { level: 2, text: 'A', pos: 2, slot: 0 },
+    { level: 3, text: 'A.1', pos: 2, slot: 1 },
   ]);
 });
 

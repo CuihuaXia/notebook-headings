@@ -1,15 +1,13 @@
 {
-  "extension.description": "为 Jupyter notebook 和 Markdown 文件提供分级标题目录，打开时只展开到指定层级。",
+  "extension.description": "为 Jupyter notebook 和 Markdown 文件提供分级标题目录，打开时只展开到指定层级，支持状态标记、星标和整节操作。",
   "view.welcome": "打开一个 Jupyter notebook 或 Markdown 文件，即可查看它的标题。",
   "command.quickJump": "Notebook Headings：跳转到标题…",
   "command.filter": "筛选标题",
   "command.clearFilter": "清除筛选",
   "command.toggleNumbering": "显示/隐藏标题编号",
   "command.resetExpansion": "折叠到默认层级",
-  "command.refresh": "刷新",
   "command.reveal": "跳转到标题",
   "command.copyTitle": "复制标题文字",
-  "command.copyPath": "复制标题路径",
   "command.selectSection": "选中本节",
   "config.defaultExpandLevel": "打开文档时默认展开到第几级标题。更深的标题都会保留，只是先折叠（2 = 显示 # 和 ##，## 先折叠）。",
   "config.numbering": "在标题前显示层级编号（1、1.1、1.1.1……）。",
@@ -28,5 +26,12 @@
   "color.level6": "Notebook Headings：第 6 级小节标题的颜色（灰色；文档中有多个 # 标题时用于 ###### 标题）。",
   "command.editCellTags": "Notebook Headings：编辑 cell 标签…",
   "config.cellTagButton": "在代码 cell（以及已有标签的 Markdown cell）右下角显示\"Tags\"按钮。点击后弹出折叠标签（hide-output、hide-input、hide-cell）的勾选列表，用来设置这个 cell 的标签；只修改 cell 元数据里的标签，可以撤销。",
-  "command.editSectionTags": "编辑本节标签…"
+  "command.editSectionTags": "编辑本节标签…",
+  "command.copyReference": "复制本节引用",
+  "command.setStatus": "设置状态…",
+  "command.addStar": "加星标",
+  "command.removeStar": "取消星标",
+  "command.showMarked": "只看有标记的标题",
+  "command.copyContent": "复制本节内容",
+  "config.inProgressMarkers": "标题文字里含有这些记号的，不用设置状态也显示为\"进行中\"，例如 \"## ??? Analysis\"。清空列表即关闭。"
 }

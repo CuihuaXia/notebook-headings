@@ -118,16 +118,19 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
 
 /**
  * Headings of a notebook. Only Markdown cells are scanned; a heading's
- * position is the index of the cell that contains it.
+ * position is the index of the cell that contains it, and its slot is its
+ * index among the headings of that cell (0 for the first), which is how its
+ * marks are stored (see src/marks.js).
  *
  * @param {{ isMarkdown: boolean, text: string }[]} cells all cells, in order
- * @returns {{ level: number, text: string, pos: number }[]}
+ * @returns {{ level: number, text: string, pos: number, slot: number }[]}
  */
 function parseNotebookHeadings(cells) {
   const headings = [];
   cells.forEach((cell, index) => {
     if (!cell.isMarkdown) return;
-    scanHeadings(cell.text, (level, text) => headings.push({ level, text, pos: index }));
+    let slot = 0;
+    scanHeadings(cell.text, (level, text) => headings.push({ level, text, pos: index, slot: slot++ }));
   });
   return headings;
 }

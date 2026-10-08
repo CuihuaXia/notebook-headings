@@ -6,9 +6,9 @@ node_modules/
 test/
 examples/
 releases/
-docs/
 *.vsix
 README.zh-CN.md
-# README screenshots are shown via GitHub URLs (see README "Development").
+# README screenshots are shown via GitHub URLs (see CONTRIBUTING.md).
 media/screenshots/
 CONTRIBUTING.md
+scripts/

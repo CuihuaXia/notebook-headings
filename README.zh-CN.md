@@ -25,10 +25,13 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。
 - **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
 - **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。
-- **右键复制**：复制标题文字，或带编号的完整路径，如 `标题 › 2  Analysis › 2.1  Summary`。
+- **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
 - **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。
-- **安全**：从不改动你的代码、文字或输出。扩展唯一会做的修改，是你在标签选择器里修改某个 cell 的标签，并且可以用 `Cmd+Z` 撤销。
+- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色实心的状态图标。标题里带 `???` 的自动算作"进行中"。
+- **星标**：**Add Star**（加星标）在标题前显示金色星标图标，并把标题列到目录顶部的"星标"分组里，点一下就能跳过去。
+- **折叠起来也看得到标记**：每个上级标题的右侧会汇总它下面各级（直到第六级）的标记，例如 `○2 ➤1 ✓3 ★2`（○ 待做、➤ 进行中、? 待核对、✓ 已完成、★ 星标）；第一级标题前面还会用小图标显示这一节里有哪些状态。工具栏的书签按钮只显示有标记的标题。标记保存在 notebook 文件里，跟着文件走。
+- **安全**：从不改动你的代码、文字或输出。扩展只会修改你亲自设置的 cell 元数据——cell 的标签和标题的标记，都可以用 `Cmd+Z` 撤销。
 
 Markdown 解析会跳过文件开头的 YAML front matter 和代码块，代码里的 `# 注释` 不会被当成标题。
 
@@ -55,7 +58,7 @@ code --install-extension cuihuaxia.notebook-headings
 每个版本的安装包都附在对应的 [GitHub Release](https://github.com/CuihuaXia/notebook-headings/releases) 上，也保存在 [`releases/`](releases/) 文件夹里。扩展面板右上角 `…` 菜单 → **Install from VSIX…（从 VSIX 安装）** → 选择 `.vsix` 文件；或者：
 
 ```bash
-code --install-extension releases/notebook-headings-1.0.2.vsix
+code --install-extension releases/notebook-headings-<version>.vsix
 ```
 
 只在无法访问插件市场时使用：从 VSIX 安装的扩展不会被 Settings Sync 同步，也不会自动更新。
@@ -82,18 +85,22 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 
 | 按钮 | 作用 |
 | --- | --- |
-| 🔍 Filter Headings | 输入关键词过滤；Enter 保留，Esc 取消。过滤时变成 ✕，点击清除。 |
+| Filter Headings（漏斗） | 输入关键词过滤；Enter 保留，Esc 取消。过滤时变成 ✕，点击清除。 |
+| Show Marked Headings（书签） | 只看有标记的标题：加了星标的，以及待做、进行中、待核对的（连同上级标题）。点 ✕ 返回。 |
 | 1≡ Toggle Heading Numbers | 显示/隐藏编号。 |
 | ⊟ Collapse to Default Level | 恢复默认展开层级。 |
-| `…` → Refresh | 重新读取标题（一般会自动刷新，不需要手动点）。 |
 
 在标题上**右键**：
 
+- **Set Status…**（设置状态，仅 notebook）：待做、进行中、待核对、已完成，或清除状态。标题文字里带 `???` 的算作"进行中"，直到你设置了别的状态或删掉 `???`。
+- **Add Star / Remove Star**（加星标 / 取消星标，仅 notebook）：加了星标的标题列在目录顶部的"星标"分组里，点一下就跳过去。
 - **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
 - **Edit Section Tags…**（编辑本节标签，仅 notebook）：为这一节（包括所有子小节）的所有代码 cell 打开标签勾选列表，比如一次给整个分析小节加上 `hide-output`。标题和文字 cell 不受影响，网页上这一节仍然可读。
-- **Copy Heading Text**（复制标题文字）、**Copy Heading Path**（复制完整路径）。
+- **Copy Heading Text**（复制标题文字）。
+- **Copy Section Reference**（复制本节引用）：复制文件路径、标题路径和 cell 范围（Markdown 中是行号范围），例如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`。粘贴到 Claude Code 等 AI 对话里，就能指明是哪一节；这些工具读得到选中的文字，但读不到选中的 cell。
+- **Copy Section Content**（复制本节内容）：把这一节所有 cell（或所有行）复制成纯文本，代码 cell 用带语言的 ```` ``` ```` 代码块包起来。
 
-用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，再在其中一个上右键：**Select Section** 会一次选中这些小节的所有 cell（嵌套或相邻的小节会自动合并，不会重复选中）；两个复制命令会按顺序每行复制一个标题；**Edit Section Tags…** 会给这些小节的所有代码 cell 设置标签。
+用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，再在其中一个上右键：设置状态和星标会作用于所有选中的标题；**Select Section** 会一次选中这些小节的所有 cell（嵌套或相邻的小节会自动合并，不会重复选中）；**Edit Section Tags…** 会给这些小节的所有代码 cell 设置标签；复制命令按文档顺序每个标题复制一行（复制本节内容则合成一段文字）。
 
 给 cell 设置标签：点击 cell 右下角的 **Tags**（已有标签时显示数量），勾选或取消标签，或者输入新标签，然后按 Enter。输入的文字会先用来筛选列表（比如输入 `hide` 会筛出 `hide-input`、`hide-output` 等）；只有匹配不到任何已有标签时，才会作为新标签添加。命令面板里的 **Notebook Headings：编辑 cell 标签…** 对当前选中的 cell 做同样的事。Markdown cell 只有已经有标签时才显示这个按钮。
 
@@ -122,6 +129,23 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 | `notebookHeadings.statusBar` | `true` | 状态栏显示当前小节 |
 | `notebookHeadings.cellTagButton` | `true` | 在代码 cell 上显示 Tags 按钮 |
 | `notebookHeadings.markdown` | `true` | 同时支持 Markdown 文件 |
+| `notebookHeadings.inProgressMarkers` | `["???", "？？？"]` | 标题里含有这些文字就显示为"进行中"；设为 `[]` 关闭 |
+
+### 状态标记和星标
+
+| 图标 | 状态 | 汇总里的符号 |
+| --- | --- | --- |
+| 粉色圆 + 白色圆圈 | 待做 | `○` |
+| 青绿色圆 + 白色播放箭头 | 进行中（标题里带 `???` 的也算） | `➤` |
+| 靛蓝色圆 + 白色问号 | 待核对 | `?` |
+| 绿色圆 + 白色对勾 | 已完成 | `✓` |
+| 金色圆 + 白色五角星 | 星标（已有状态图标的，在右上角加一颗小星星） | `★` |
+
+第一级标题如果下面有状态，前面会改成田字格，用缩小的图标显示这一节里有哪些状态：左上待做、右上进行中、左下待核对、右下已完成。**Show Marked Headings**（书签按钮）显示加了星标的标题和未完成的状态（待做、进行中、待核对），不显示已完成的。
+
+### 标记保存在哪里
+
+状态和星标保存在标题所在 cell 的 Jupyter 元数据里，例如 `"notebook_headings": {"0": {"status": "todo", "star": true}}`（`"0"` 表示这个 cell 里的第一个标题）。改标题文字、移动 cell、把文件拷到别的电脑，标记都还在；Jupyter、Jupyter Book 和 nbconvert 会忽略它。和其他修改一样，要保存 notebook 才会写进文件。标记只适用于 notebook；Markdown 文件里 `???` 仍然有效。标记记在"这个 cell 里的第几个标题"上，所以如果在同一个 cell 里已有标题的上方再加一个标题，这个 cell 里的标记会往后错一位。
 
 ### 自定义颜色
 
@@ -153,6 +177,7 @@ code --install-extension releases/notebook-headings-1.0.2.vsix
 - VS Code 不允许扩展修改目录面板的字号和字重，所以层级只能用颜色、图标形状和缩进区分。
 - 只识别 `#` 开头的标题，不识别下划线式标题（`===` / `---`）和 HTML `<h2>` 标签。
 - 标题上色借用了 VS Code 给文件名上色的机制，因此每个标题前都有一个图标位。
+- 标题右侧的灰色文字只能是纯文本，所以标记汇总用的是符号（`○ ➤ ? ✓ ★`），不能显示彩色图标。
 
 ## 参与开发
 

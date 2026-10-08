@@ -9,11 +9,13 @@
  *   - keep the tree, the status bar and the editor in sync (clicks, cursor
  *     moves, scrolling, edits, settings changes),
  *   - provide the commands contributed in package.json,
- *   - offer a "Tags" button on notebook code cells for editing their tags.
+ *   - offer a "Tags" button on notebook code cells for editing their tags,
+ *   - mark headings with a status or a star.
  *
- * The only change ever made to a document is a cell's tags, and only when
- * the user edits them in the tag picker (undoable with Cmd+Z). Code, text and
- * outputs are never touched.
+ * The only changes ever made to a document are cell metadata the user sets
+ * explicitly: a cell's tags (tag picker) and a heading's marks (Set Status,
+ * Add Star), each undoable with Cmd+Z. Code, text and outputs are never
+ * touched.
  */
 'use strict';
 
@@ -34,6 +36,17 @@ const {
   labelOf,
 } = require('./headings');
 const { COMMON_TAGS, isValidTag, multiPickerEntries, nextTagsMulti, sortKeysDeep } = require('./tags');
+const {
+  STATUSES,
+  statusById,
+  readMarks,
+  withMark,
+  assignMarks,
+  summarizeMarks,
+  iconFile,
+  countsText,
+  applyMarkedFilter,
+} = require('./marks');
 
 /** Id of the tree view (must match `contributes.views` in package.json). */
 const VIEW_ID = 'notebookHeadings.view';
@@ -69,14 +82,27 @@ const RANK_ICONS = [
   'circle-small', // rank 6, fallback
 ];
 
+/** Folder of the status icons (media/status/<id>.svg); set in activate(). */
+let statusIconDir;
+
 /** Settings under the `notebookHeadings.` prefix (see package.json). */
 const config = () => vscode.workspace.getConfiguration('notebookHeadings');
+
+/**
+ * Cached settings object. Drawing the tree reads settings several times per
+ * heading, and each getConfiguration() call builds a new object in VS Code,
+ * so it is read once and dropped when settings change (see activate()).
+ */
+let settingsCache;
+
+/** A `notebookHeadings.` setting, from the cache. */
+const setting = (key, fallback) => (settingsCache || (settingsCache = config())).get(key, fallback);
 
 /** Theme color id for a rank, e.g. `notebookHeadings.level1Foreground`. */
 const rankColor = (rank) => new vscode.ThemeColor(`notebookHeadings.level${rank}Foreground`);
 
 /** Label of a node honoring the `numbering` setting. */
-const label = (node) => labelOf(node, config().get('numbering', true));
+const label = (node) => labelOf(node, setting('numbering', true));
 
 /** Translated UI text (falls back to English); see l10n/ and package.nls*.json. */
 const t = vscode.l10n.t;
@@ -121,7 +147,7 @@ const isMarkdownEditor = (editor) =>
   !!editor &&
   editor.document.languageId === 'markdown' &&
   editor.document.uri.scheme !== 'vscode-notebook-cell' &&
-  config().get('markdown', true);
+  setting('markdown', true);
 
 /** Whether the source's document is still shown in some editor group. */
 function isVisible(source) {
@@ -159,18 +185,21 @@ function cellOutputBytes(cell) {
 function readSource(source) {
   if (source.kind === 'notebook') {
     const nb = source.doc;
+    const custom = useCustomMetadata();
     const cells = [];
     const cellBytes = [];
+    const cellMarks = [];
     for (let i = 0; i < nb.cellCount; i++) {
       const cell = nb.cellAt(i);
       const isMarkdown = cell.kind === vscode.NotebookCellKind.Markup;
       // Only Markdown cells are parsed, so code cell text is never read.
       cells.push({ isMarkdown, text: isMarkdown ? cell.document.getText() : '' });
       cellBytes.push(cellOutputBytes(cell));
+      cellMarks.push(isMarkdown ? readMarks(jupyterMetaOf(cell, custom)) : {});
     }
-    return { headings: parseNotebookHeadings(cells), total: nb.cellCount, cellBytes };
+    return { headings: parseNotebookHeadings(cells), total: nb.cellCount, cellBytes, marksAt: (pos) => cellMarks[pos] };
   }
-  return { headings: parseMarkdownHeadings(source.doc.getText()), total: source.doc.lineCount };
+  return { headings: parseMarkdownHeadings(source.doc.getText()), total: source.doc.lineCount, marksAt: () => ({}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -190,38 +219,60 @@ function useCustomMetadata() {
   return !(ipynb && ipynb.exports && ipynb.exports.dropCustomMetadata);
 }
 
-/** A notebook cell's current tags (a copy). */
-function getCellTags(cell) {
+/**
+ * A cell's Jupyter metadata (the object saved as the cell's "metadata" in
+ * the .ipynb file), read-only.
+ *
+ * @param {object} cell
+ * @param {boolean} [custom] result of useCustomMetadata(), when already known
+ */
+function jupyterMetaOf(cell, custom = useCustomMetadata()) {
   const md = cell.metadata || {};
-  const tags = useCustomMetadata() ? md.custom && md.custom.metadata && md.custom.metadata.tags : md.metadata && md.metadata.tags;
-  return Array.isArray(tags) ? [...tags] : [];
+  const holder = custom ? md.custom : md;
+  return (holder && holder.metadata) || {};
 }
 
-/** A cell's metadata with its tags replaced; everything else is kept. */
-function metadataWithTags(cell, tags) {
+/** A cell's VS Code metadata with its Jupyter metadata replaced; everything else is kept. */
+function metadataWithJupyter(cell, jupyterMeta) {
   const md = JSON.parse(JSON.stringify(cell.metadata || {}));
   const holder = useCustomMetadata() ? ((md.custom = md.custom || {}), md.custom) : md;
-  holder.metadata = holder.metadata || {};
-  if (tags.length) holder.metadata.tags = tags;
-  else delete holder.metadata.tags;
+  holder.metadata = jupyterMeta;
   return sortKeysDeep(md);
 }
 
+/** A notebook cell's current tags (a copy). */
+function getCellTags(cell) {
+  const tags = jupyterMetaOf(cell).tags;
+  return Array.isArray(tags) ? [...tags] : [];
+}
+
+/** A cell's Jupyter metadata with its tags replaced; everything else is kept. */
+function metadataWithTags(cell, tags) {
+  const meta = JSON.parse(JSON.stringify(jupyterMetaOf(cell)));
+  if (tags.length) meta.tags = tags;
+  else delete meta.tags;
+  return meta;
+}
+
 /**
- * Replace the tags of one or more cells of a notebook in a single
- * WorkspaceEdit, so one Cmd+Z undoes the whole change.
+ * Replace the Jupyter metadata of one or more cells of a notebook in a single
+ * WorkspaceEdit, so one Cmd+Z undoes the whole change. Used for tags and
+ * marks, the only edits this extension makes.
  *
- * @param {{ cell: object, tags: string[] }[]} changes
+ * @param {[object, object][]} changes [cell, its new Jupyter metadata] pairs
  */
-async function setCellTags(changes) {
+async function setJupyterMetadata(changes) {
   if (!changes.length) return false;
   const edit = new vscode.WorkspaceEdit();
   edit.set(
-    changes[0].cell.notebook.uri,
-    changes.map(({ cell, tags }) => vscode.NotebookEdit.updateCellMetadata(cell.index, metadataWithTags(cell, tags)))
+    changes[0][0].notebook.uri,
+    changes.map(([cell, meta]) => vscode.NotebookEdit.updateCellMetadata(cell.index, metadataWithJupyter(cell, meta)))
   );
   return vscode.workspace.applyEdit(edit);
 }
+
+/** Replace the tags of one or more cells as one undoable edit. */
+const setCellTags = (changes) => setJupyterMetadata(changes.map(({ cell, tags }) => [cell, metadataWithTags(cell, tags)]));
 
 /** Whether a notebook cell is a code cell (not Markdown). */
 const isCodeCell = (cell) => cell.kind === vscode.NotebookCellKind.Code;
@@ -251,7 +302,7 @@ class CellTagButton {
   }
 
   provideCellStatusBarItems(cell) {
-    if (!config().get('cellTagButton', true)) return [];
+    if (!setting('cellTagButton', true)) return [];
     const tags = getCellTags(cell);
     // The offered tags collapse code and outputs, so the button belongs on code
     // cells; a Markdown cell shows it only when it already has tags to edit.
@@ -284,7 +335,7 @@ class LevelDecorations {
   }
 
   provideFileDecoration(uri) {
-    if (uri.scheme !== DECO_SCHEME || !config().get('levelColors', true)) return undefined;
+    if (uri.scheme !== DECO_SCHEME || !setting('levelColors', true)) return undefined;
     const rank = Number(new URLSearchParams(uri.query).get('rank'));
     return rank ? { color: rankColor(rank) } : undefined;
   }
@@ -309,15 +360,27 @@ class HeadingsProvider {
     /** tree item id -> heading node, rebuilt with the tree */
     this.byId = new Map();
     this.filter = '';
+    /** "Show Marked Headings": only starred headings and open statuses */
+    this.markedOnly = false;
+    this.markedCount = 0;
+    /** the "Starred" group shown above the headings, or undefined */
+    this.starGroup = undefined;
+    /** called after every rebuild (updates the view's filter description) */
+    this.afterRebuild = undefined;
     /** document uri -> counter bumped by "Collapse to Default Level" */
     this.generations = new Map();
     /** tree item id -> expansion chosen by the user (overrides the default) */
     this.expanded = new Map();
   }
 
+  /** Whether the tree shows a filtered subset (text filter or marked only). */
+  get filtering() {
+    return !!this.filter || this.markedOnly;
+  }
+
   setSource(source) {
     this.source = source;
-    // Lets package.json show notebook-only menu items (Edit Section Tags).
+    // Lets package.json show notebook-only menu items (tags, marks).
     vscode.commands.executeCommand('setContext', 'notebookHeadings.isNotebook', !!source && source.kind === 'notebook');
     this.rebuild();
   }
@@ -334,15 +397,31 @@ class HeadingsProvider {
     this.rebuild();
   }
 
+  /** Text filter; replaces "Show Marked Headings". */
   setFilter(query) {
     this.filter = query.trim();
-    applyFilter(this.roots, this.filter);
+    this.markedOnly = false;
+    this.applyFilters();
     this._onDidChange.fire();
+  }
+
+  /** "Show Marked Headings" on or off; replaces the text filter. */
+  setMarkedOnly(on) {
+    this.markedOnly = on;
+    this.filter = '';
+    this.applyFilters();
+    this._onDidChange.fire();
+  }
+
+  applyFilters() {
+    if (this.markedOnly) this.markedCount = applyMarkedFilter(this.roots);
+    else applyFilter(this.roots, this.filter);
   }
 
   /** Re-read the source document and redraw the whole tree. */
   rebuild() {
     const src = this.source;
+    this.starGroup = undefined;
     if (!src) {
       this.roots = [];
       this.flat = [];
@@ -350,27 +429,38 @@ class HeadingsProvider {
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
-      const { headings, total, cellBytes } = readSource(src);
+      const { headings, total, cellBytes, marksAt } = readSource(src);
       ({ roots: this.roots, flat: this.flat } = buildTree(headings, prefix, total));
       this.byId = new Map(this.flat.map((n) => [n.id, n]));
       if (cellBytes) assignOutputSizes(this.flat, cellBytes);
-      assignNumbers(this.roots, config().get('numberH1', false));
+      assignNumbers(this.roots, setting('numberH1', false));
       assignColorRanks(this.flat);
-      applyFilter(this.roots, this.filter);
+      assignMarks(this.flat, marksAt, setting('inProgressMarkers', ['???', '？？？']));
+      summarizeMarks(this.roots);
+      const starred = this.flat.filter((n) => n.star);
+      if (starred.length) {
+        const group = { group: true, id: `${prefix}|starred`, text: t('Starred'), level: 0, children: [] };
+        group.children = starred.map((n) => ({ ref: n, id: `${n.id}|starred`, text: n.text, level: n.level, children: [], parent: group }));
+        this.starGroup = group;
+      }
+      this.applyFilters();
     }
     this._onDidChange.fire();
+    if (this.afterRebuild) this.afterRebuild();
   }
 
   /**
    * Whether the tree currently shows this node's children: always while a
    * filter is active, otherwise the user's choice, otherwise the default
-   * (expanded when shallower than `defaultExpandLevel`).
+   * (expanded when shallower than `defaultExpandLevel`; the Starred group
+   * starts expanded).
    */
   isExpanded(node) {
     if (!node.children.length) return false;
-    if (this.filter) return true;
+    if (this.filtering && !node.group) return true;
     const chosen = this.expanded.get(node.id);
-    return chosen !== undefined ? chosen : node.level < config().get('defaultExpandLevel', 2);
+    if (chosen !== undefined) return chosen;
+    return node.group ? true : node.level < setting('defaultExpandLevel', 2);
   }
 
   /**
@@ -391,26 +481,34 @@ class HeadingsProvider {
   // --- TreeDataProvider interface ---------------------------------------------
 
   getChildren(node) {
+    if (node && (node.group || node.ref)) return node.children;
     const list = node ? node.children : this.roots;
-    return this.filter ? list.filter((n) => n.visible) : list;
+    const shown = this.filtering ? list.filter((n) => n.visible) : list;
+    // The Starred group sits above the headings, except while filtering.
+    return !node && this.starGroup && !this.filtering ? [this.starGroup, ...shown] : shown;
   }
 
   /** Required by TreeView.reveal(). */
   getParent(node) {
+    if (node.ref) return node.parent;
+    if (node.group) return undefined;
     return node.parent && node.parent.level > 0 ? node.parent : undefined;
   }
 
   getTreeItem(node) {
+    if (node.group) return this.groupItem(node);
+    const ref = node.ref;
+    if (ref) node = ref;
     const text = label(node);
     const treeLabel = { label: text };
-    if (node.matchAt >= 0) {
+    if (!ref && node.matchAt >= 0) {
       // The match index is relative to node.text; shift past the number prefix.
       const start = text.length - node.text.length + node.matchAt;
       treeLabel.highlights = [[start, start + this.filter.length]];
     }
 
     let state = vscode.TreeItemCollapsibleState.None;
-    if (this.getChildren(node).length) {
+    if (!ref && this.getChildren(node).length) {
       state = this.isExpanded(node)
         ? vscode.TreeItemCollapsibleState.Expanded
         : vscode.TreeItemCollapsibleState.Collapsed;
@@ -418,38 +516,79 @@ class HeadingsProvider {
 
     const item = new vscode.TreeItem(treeLabel, state);
     // Filtered views get their own ids so their all-expanded state never
-    // leaks into the normal tree.
-    item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
+    // leaks into the normal tree; starred shortcuts have their own too.
+    if (ref) item.id = `${node.id}|starred`;
+    else if (this.markedOnly) item.id = `${node.id}|marked`;
+    else item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
+    // Menus in package.json tell headings (and starred ones) apart by this.
+    item.contextValue = node.star ? 'heading.starred' : 'heading';
 
     const notebook = this.source && this.source.kind === 'notebook';
     const size = notebook ? formatBytes(node.bytes) : '';
-    item.tooltip =
-      `${'#'.repeat(node.level)} ${node.text}\n` +
-      (notebook ? cellsText(node.size) : t('line {0}', node.pos + 1)) +
-      (size ? `\n${t('outputs: {0}', size)}` : '');
-    if (notebook) {
-      // e.g. "34 · 2.1 MB": cell count and/or output size, as configured.
-      const parts = [];
-      if (config().get('showCellCount', true)) parts.push(`${node.size}`);
-      if (size && config().get('showOutputSize', true)) parts.push(size);
-      if (parts.length) item.description = parts.join(' · ');
+    const status = node.status && statusById(node.status);
+    const lines = [`${'#'.repeat(node.level)} ${node.text}`, notebook ? cellsText(node.size) : t('line {0}', node.pos + 1)];
+    if (size) lines.push(t('outputs: {0}', size));
+    if (status) lines.push(node.autoStatus ? t('Status: {0} (from the heading text)', t(status.label)) : t('Status: {0}', t(status.label)));
+    if (node.star) lines.push(t('Starred'));
+    const counts = countsText(node.counts);
+    if (counts) lines.push(t('Marks below: {0}', counts));
+    // First-level sections show every status they hold (theirs and their
+    // subsections', finished included) as one 2×2 grid icon.
+    const group = node.rank === 1 && node.below && node.below.size ? new Set([...node.below, ...(node.status ? [node.status] : [])]) : undefined;
+    if (group) {
+      const names = STATUSES.filter((st) => group.has(st.id)).map((st) => t(st.label));
+      lines.push(t('Statuses in this section: {0}', names.join(', ')));
     }
+    item.tooltip = lines.join('\n');
 
-    if (config().get('levelColors', true)) {
-      if (node.rank) {
-        item.resourceUri = vscode.Uri.from({
-          scheme: DECO_SCHEME,
-          // Must not start with "//" (invalid without an authority).
-          path: `/level${node.rank}`,
-          query: `rank=${node.rank}`,
-        });
-      }
+    // Description: "34 · 2.1 MB · ○2 ➤1 ✓3 ★2" (cells, output size, then the
+    // statuses and stars below the heading, at any depth). Starred shortcuts
+    // show their path instead.
+    const parts = [];
+    if (ref) {
+      const path = ancestry(node).slice(0, -1).filter((n) => n.rank !== 0);
+      if (path.length) parts.push(path.map(label).join(' › '));
+    } else {
+      if (notebook && setting('showCellCount', true)) parts.push(`${node.size}`);
+      if (size && setting('showOutputSize', true)) parts.push(size);
+      if (counts) parts.push(counts);
+    }
+    if (parts.length) item.description = parts.join(' · ');
+
+    // A status, star or (first-level) grid of statuses replaces the level
+    // shape so marked sections stand out; see iconFile() in src/marks.js.
+    const marked = iconFile({ status: node.status, star: node.star, group });
+    if (marked) {
+      item.iconPath = vscode.Uri.joinPath(statusIconDir, marked);
+    } else if (setting('levelColors', true)) {
       // An explicit icon keeps VS Code from showing a file-type icon for the
       // resource URI; the title gets one too so all levels indent equally.
       item.iconPath = new vscode.ThemeIcon(RANK_ICONS[node.rank], node.rank ? rankColor(node.rank) : undefined);
     }
+    if (setting('levelColors', true) && node.rank) {
+      item.resourceUri = vscode.Uri.from({
+        scheme: DECO_SCHEME,
+        // Must not start with "//" (invalid without an authority).
+        path: `/level${node.rank}`,
+        query: `rank=${node.rank}`,
+      });
+    }
 
     item.command = { command: 'notebookHeadings.reveal', title: 'Go to Heading', arguments: [node] };
+    return item;
+  }
+
+  /** The "Starred" group above the headings. */
+  groupItem(group) {
+    const state = this.isExpanded(group)
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : vscode.TreeItemCollapsibleState.Collapsed;
+    const item = new vscode.TreeItem(group.text, state);
+    item.id = group.id;
+    item.contextValue = 'starredGroup';
+    item.iconPath = vscode.Uri.joinPath(statusIconDir, 'star.svg');
+    item.description = `${group.children.length}`;
+    item.tooltip = t('Starred headings, in document order. Right-click a heading → Remove Star to take it off.');
     return item;
   }
 }
@@ -465,6 +604,7 @@ class HeadingsProvider {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+  statusIconDir = vscode.Uri.joinPath(context.extensionUri, 'media', 'status');
   const provider = new HeadingsProvider();
   const decorations = new LevelDecorations();
   const tagButton = new CellTagButton();
@@ -488,7 +628,7 @@ function activate(context) {
   /** Show the exact section of `pos` in the status bar. */
   const updateStatus = (pos) => {
     const node = pos === undefined ? undefined : headingAt(provider.flat, pos);
-    if (!node || !config().get('statusBar', true)) return status.hide();
+    if (!node || !setting('statusBar', true)) return status.hide();
     status.text = `$(list-tree) ${truncate(label(node), 48)}`;
     status.tooltip = ancestry(node).map(label).join('  ›  ') + '\n\n' + t('Click to show the headings view');
     status.show();
@@ -512,7 +652,7 @@ function activate(context) {
    *        (not a scroll, an edit, or a selection this extension made)
    */
   const follow = (pos, userMoved = false) => {
-    if (pos === undefined || !view.visible || !config().get('followCursor', true)) return;
+    if (pos === undefined || !view.visible || !setting('followCursor', true)) return;
     // Don't replace a multi-selection the user built in the tree because of a
     // scroll or an edit; once they move the cursor in the editor themselves,
     // following resumes.
@@ -578,14 +718,29 @@ function activate(context) {
   const updateFilterUi = () => {
     const q = provider.filter;
     const matches = q ? provider.flat.filter((n) => n.matchAt >= 0).length : 0;
-    view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
-    vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', !!q);
+    if (provider.markedOnly) view.description = t('Marked headings · {0}', provider.markedCount);
+    else view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
+    vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', provider.filtering);
   };
+
+  // Match and mark counts change whenever the tree is rebuilt (edits, marks,
+  // settings, switching documents).
+  provider.afterRebuild = updateFilterUi;
 
   const setFilter = (q) => {
     provider.setFilter(q);
     lastRevealed = undefined;
     updateFilterUi();
+  };
+
+  /** "Show Marked Headings": only starred headings and open statuses. */
+  const showMarked = () => {
+    provider.setMarkedOnly(true);
+    lastRevealed = undefined;
+    updateFilterUi();
+    if (!provider.markedCount) {
+      vscode.window.showInformationMessage(t('Notebook Headings: no starred headings or open statuses yet. Right-click a heading to set one.'));
+    }
   };
   const liveFilter = debounce(setFilter, 120);
 
@@ -658,7 +813,7 @@ function activate(context) {
     const current = headingAt(provider.flat, cursorPos(provider.source));
     const items = provider.flat.map((node) => ({
       // Em spaces indent by depth; $(icon) renders the level shape.
-      label: `${' '.repeat(ancestry(node).length - 1)}$(${RANK_ICONS[node.rank]}) ${label(node)}`,
+      label: `${' '.repeat(ancestry(node).length - 1)}$(${node.status ? statusById(node.status).icon : RANK_ICONS[node.rank]}) ${node.star ? '$(star-full) ' : ''}${label(node)}`,
       description: notebook
         ? [cellsText(node.size), formatBytes(node.bytes)].filter(Boolean).join(' · ')
         : t('line {0}', node.pos + 1),
@@ -685,6 +840,12 @@ function activate(context) {
    * right-clicked heading is not part of that selection, only it counts.
    */
   const targetsOf = (node, selected) => {
+    // Shortcuts in the Starred group stand for their headings; the group
+    // itself is never a target.
+    const real = (n) => (n && n.ref) || n;
+    node = real(node);
+    if (node && node.group) node = undefined;
+    if (Array.isArray(selected)) selected = selected.map(real).filter((n) => n && !n.group);
     const sameNode = (a, b) => a === b || (a && b && a.id === b.id);
     const list =
       Array.isArray(selected) && selected.length && selected.some((n) => sameNode(n, node)) ? selected : node ? [node] : [];
@@ -694,6 +855,9 @@ function activate(context) {
     const fresh = list.map((n) => (provider.byId && provider.byId.get(n.id)) || null).filter(Boolean);
     return [...new Set(fresh)].sort((a, b) => provider.flat.indexOf(a) - provider.flat.indexOf(b));
   };
+
+  /** The merged cell (or line) ranges of the given headings' sections, in order. */
+  const sectionRanges = (nodes) => mergeRanges(nodes.map((n) => sectionRange(provider.flat, n)));
 
   /**
    * "Select Section": select every cell (or line) of one or more headings'
@@ -838,7 +1002,7 @@ function activate(context) {
     const src = provider.source;
     const nodes = targetsOf(node, selected);
     if (!src || src.kind !== 'notebook' || !nodes.length) return;
-    const ranges = mergeRanges(nodes.map((n) => sectionRange(provider.flat, n)));
+    const ranges = sectionRanges(nodes);
     // Only code cells: the heading and text cells stay visible on the page.
     const cells = [];
     for (const r of ranges) {
@@ -859,11 +1023,135 @@ function activate(context) {
     openTagPicker(cells, title);
   };
 
+  /**
+   * "Copy Section Reference": file, heading path and cell (or line) range of a
+   * section, e.g. `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · cells 12–30`.
+   * Cell selections are not passed on to chat assistants such as Claude Code
+   * (only selected text is), so pasting this tells them exactly which cells
+   * are meant. Numbers are 1-based, as shown in the editor.
+   */
+  const sectionReference = (node) => {
+    const src = provider.source;
+    const file = vscode.workspace.asRelativePath(src.doc.uri, true);
+    const { start, end } = sectionRange(provider.flat, node);
+    const first = start + 1;
+    const last = end;
+    const notebook = src.kind === 'notebook';
+    let range;
+    if (first === last) range = notebook ? t('cell {0}', first) : t('line {0}', first);
+    else range = notebook ? t('cells {0}–{1}', first, last) : t('lines {0}–{1}', first, last);
+    return [file, ancestry(node).map(label).join(' › '), range].join(' · ');
+  };
+
+  /**
+   * "Copy Section Content": the text of every cell (or line) of one or more
+   * sections, for pasting into a chat that cannot read local files. Code
+   * cells are fenced with their language; overlapping sections are merged.
+   */
+  const copyContent = async (node, selected) => {
+    const src = provider.source;
+    const nodes = targetsOf(node, selected);
+    if (!src || !nodes.length) return;
+    const ranges = sectionRanges(nodes);
+    if (src.kind === 'notebook') {
+      const blocks = [];
+      for (const r of ranges) {
+        for (let i = r.start; i < Math.min(r.end, src.doc.cellCount); i++) {
+          const cell = src.doc.cellAt(i);
+          const body = cell.document.getText();
+          if (cell.kind === vscode.NotebookCellKind.Markup) {
+            blocks.push(body);
+          } else {
+            // A fence longer than any backtick run inside the code.
+            const longest = (body.match(/`+/g) || []).reduce((m, run) => Math.max(m, run.length), 0);
+            const fence = '`'.repeat(Math.max(3, longest + 1));
+            blocks.push(`${fence}${cell.document.languageId}\n${body}\n${fence}`);
+          }
+        }
+      }
+      await copy(blocks.join('\n\n'), t('Copied {0}', cellsText(blocks.length)));
+    } else {
+      const doc = src.doc;
+      let lines = 0;
+      const parts = ranges.map((r) => {
+        const last = Math.min(r.end, doc.lineCount);
+        lines += last - r.start;
+        const end = last < doc.lineCount ? new vscode.Position(last, 0) : doc.lineAt(last - 1).range.end;
+        return doc.getText(new vscode.Range(new vscode.Position(r.start, 0), end)).replace(/\n+$/, ''); // no trailing blank lines
+      });
+      await copy(parts.join('\n\n'), t('Copied {0}', linesText(lines)));
+    }
+  };
+
+  // --- marks: status and star -----------------------------------------------------------
+
+  /**
+   * Write a mark change to the cells holding the given headings, as one
+   * undoable edit, then redraw the tree right away.
+   *
+   * @param {object[]} nodes
+   * @param {{ status?: string|null, star?: boolean }} patch see withMark()
+   */
+  const setMarks = async (nodes, patch) => {
+    const src = provider.source;
+    if (!src || src.kind !== 'notebook') return false;
+    const metas = new Map(); // cell -> its new Jupyter metadata
+    for (const n of nodes) {
+      if (n.pos >= src.doc.cellCount) continue;
+      const cell = src.doc.cellAt(n.pos);
+      if (cell.kind !== vscode.NotebookCellKind.Markup) continue;
+      metas.set(cell, withMark(metas.get(cell) || jupyterMetaOf(cell), n.slot, patch));
+    }
+    const ok = await setJupyterMetadata([...metas]);
+    if (ok) {
+      scheduleRebuild.cancel();
+      provider.rebuild();
+    }
+    return ok;
+  };
+
+  const headingsText = (nodes) =>
+    nodes.length === 1 ? `"${truncate(nodes[0].text, 40)}"` : t('{0} headings', nodes.length);
+
+  /** "Set Status…": TODO, In progress, To check, Finished, or clear. */
+  const setStatus = async (node, selected) => {
+    const src = provider.source;
+    const nodes = targetsOf(node, selected);
+    if (!src || src.kind !== 'notebook' || !nodes.length) return;
+    const same = nodes.every((n) => n.status === nodes[0].status) ? nodes[0].status : undefined;
+    const items = STATUSES.map((st) => ({
+      label: `$(${st.icon}) ${t(st.label)}`,
+      description: st.id === same ? t('current') : '',
+      id: st.id,
+    }));
+    items.push({ label: `$(close) ${t('Clear Status')}`, description: '', id: null });
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: t('Status of {0}', headingsText(nodes)) });
+    if (!pick) return;
+    if (!(await setMarks(nodes, { status: pick.id }))) return;
+    const after = nodes.map((n) => provider.byId.get(n.id)).filter(Boolean);
+    if (pick.id === null && after.some((n) => n.autoStatus)) {
+      vscode.window.showInformationMessage(
+        t('Notebook Headings: a heading whose text contains an in-progress marker (such as ???) still shows as in progress. Remove the marker from the text, or set the status to Finished.')
+      );
+    }
+  };
+
+  /** "Add Star" / "Remove Star". */
+  const setStar = (on) => async (node, selected) => {
+    const nodes = targetsOf(node, selected);
+    if (!nodes.length) return;
+    if (await setMarks(nodes, { star: on })) {
+      const msg = on ? t('Starred {0}', headingsText(nodes)) : t('Removed star from {0}', headingsText(nodes));
+      vscode.window.setStatusBarMessage(`$(star-${on ? 'full' : 'empty'}) ${msg}`, 3000);
+    }
+  };
+
   /** Copy to the clipboard with a short status bar confirmation. */
-  const copy = async (text) => {
+  const copy = async (text, message) => {
     if (!text) return;
     await vscode.env.clipboard.writeText(text);
-    vscode.window.setStatusBarMessage(`$(check) ${t('Copied: {0}', truncate(text.replace(/\n/g, ' · '), 60))}`, 2500);
+    const shown = message || t('Copied: {0}', truncate(text.replace(/\n/g, ' · '), 60));
+    vscode.window.setStatusBarMessage(`$(check) ${shown}`, 2500);
   };
 
   // --- wiring ---------------------------------------------------------------------------
@@ -876,8 +1164,8 @@ function activate(context) {
 
     // Remember what the user expands/collapses (ignored while filtering,
     // where everything is expanded by design).
-    view.onDidExpandElement((e) => provider.filter || provider.expanded.set(e.element.id, true)),
-    view.onDidCollapseElement((e) => provider.filter || provider.expanded.set(e.element.id, false)),
+    view.onDidExpandElement((e) => provider.filtering || provider.expanded.set(e.element.id, true)),
+    view.onDidCollapseElement((e) => provider.filtering || provider.expanded.set(e.element.id, false)),
     view.onDidChangeVisibility((e) => {
       lastRevealed = undefined;
       if (e.visible) follow(cursorPos(provider.source));
@@ -918,6 +1206,7 @@ function activate(context) {
     // redraws while keeping what the user has expanded.
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('notebookHeadings')) return;
+      settingsCache = undefined;
       if (e.affectsConfiguration('notebookHeadings.cellTagButton')) tagButton.refresh();
       if (e.affectsConfiguration('notebookHeadings.markdown')) track();
       if (e.affectsConfiguration('notebookHeadings.defaultExpandLevel')) {
@@ -935,13 +1224,12 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.filter', promptFilter),
     vscode.commands.registerCommand('notebookHeadings.clearFilter', () => setFilter('')),
     vscode.commands.registerCommand('notebookHeadings.toggleNumbering', () =>
-      config().update('numbering', !config().get('numbering', true), vscode.ConfigurationTarget.Global)
+      config().update('numbering', !setting('numbering', true), vscode.ConfigurationTarget.Global)
     ),
     vscode.commands.registerCommand('notebookHeadings.resetExpansion', () => {
       lastRevealed = undefined;
       provider.resetExpansion();
     }),
-    vscode.commands.registerCommand('notebookHeadings.refresh', () => provider.rebuild()),
     vscode.commands.registerCommand('notebookHeadings.selectSection', selectSection),
     vscode.commands.registerCommand('notebookHeadings.editCellTags', editCellTags),
     vscode.commands.registerCommand('notebookHeadings.editSectionTags', editSectionTags),
@@ -949,9 +1237,14 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.copyTitle', (node, selected) =>
       copy(targetsOf(node, selected).map((n) => n.text).join('\n'))
     ),
-    vscode.commands.registerCommand('notebookHeadings.copyPath', (node, selected) =>
-      copy(targetsOf(node, selected).map((n) => ancestry(n).map(label).join(' › ')).join('\n'))
+    vscode.commands.registerCommand('notebookHeadings.copyReference', (node, selected) =>
+      copy(targetsOf(node, selected).map(sectionReference).join('\n'))
     ),
+    vscode.commands.registerCommand('notebookHeadings.copyContent', copyContent),
+    vscode.commands.registerCommand('notebookHeadings.setStatus', setStatus),
+    vscode.commands.registerCommand('notebookHeadings.addStar', setStar(true)),
+    vscode.commands.registerCommand('notebookHeadings.removeStar', setStar(false)),
+    vscode.commands.registerCommand('notebookHeadings.showMarked', showMarked),
 
     // Pending timers must not fire after deactivation.
     { dispose: () => (scheduleRebuild.cancel(), onScroll.cancel(), liveFilter.cancel()) }

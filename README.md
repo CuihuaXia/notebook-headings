@@ -47,8 +47,11 @@ you see the structure first and drill down on demand.
   you can cut, copy, move, run or delete the section with VS Code's own
   commands. Select several headings first (`Cmd`/`Ctrl`-click or
   `Shift`-click) to select all their sections at once.
-- **Right-click to copy** a heading's text or its full path, e.g.
-  `Title › 2  Analysis › 2.1  Summary`.
+- **Right-click to copy** a heading's text, a **section reference** with its
+  file, full path and cell range (e.g.
+  `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · cells 12–30`; handy for
+  AI chats such as Claude Code, which see selected text but not selected
+  cells), or the **section's content** as plain text.
 - **English and Chinese interface.** Commands, menus, settings and messages
   follow VS Code's display language.
 - **One-click cell tags.** A **Tags** button at the bottom right of every
@@ -56,9 +59,20 @@ you see the structure first and drill down on demand.
   cell behind a click-to-show toggle in Jupyter Book / MyST pages:
   `hide-output`, `hide-input` and `hide-cell`. Any other tag can be typed in.
   Tags are stored where Jupyter, Jupyter Book and nbconvert read them.
+- **Status marks.** Right-click a heading → **Set Status…** to mark it TODO,
+  In progress, To check or Finished; its level shape turns into a filled,
+  colored status icon. Headings containing `???` count as In progress
+  automatically.
+- **Stars.** **Add Star** puts a gold star icon before a heading and lists it
+  in a **Starred** group at the top of the view, one click away.
+- **Marks stay visible when collapsed.** Every parent shows the marks below
+  it, at any depth, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check,
+  ✓ Finished, ★ starred), and first-level sections show a small icon for
+  every status they hold. The bookmark button in the toolbar shows only marked
+  headings. Marks are saved in the notebook, so they travel with the file.
 - **Safe by design.** The extension never changes your code, text or outputs.
-  The only edit it ever makes is a cell's tags, when you change them in the
-  tag picker, and it can be undone with `Cmd+Z`.
+  The only edits it ever makes are cell metadata you set yourself — a cell's
+  tags or a heading's marks — and each can be undone with `Cmd+Z`.
 
 Markdown parsing ignores YAML front matter and fenced code blocks, so
 `# comments` inside code are never mistaken for headings.
@@ -93,7 +107,7 @@ kept in [`releases/`](releases/). Extensions view → `…` menu (top right) →
 **Install from VSIX…** → choose the `.vsix`, or:
 
 ```bash
-code --install-extension releases/notebook-headings-1.0.2.vsix
+code --install-extension releases/notebook-headings-<version>.vsix
 ```
 
 Use this only when the Marketplace is not reachable: an extension installed
@@ -127,13 +141,18 @@ View toolbar, left to right:
 
 | Button | Action |
 | --- | --- |
-| 🔍 Filter Headings | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
+| Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
+| Show Marked Headings (bookmark) | Only starred headings and open statuses (TODO, In progress, To check), with their parents. ✕ goes back. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
-| `…` → Refresh | Re-read headings (normally automatic). |
 
 Right-click a heading for:
 
+- **Set Status…** (notebooks): TODO, In progress, To check, Finished, or Clear
+  Status. A heading whose text contains `???` counts as In progress until you
+  set another status or remove the `???`.
+- **Add Star** / **Remove Star** (notebooks): starred headings are listed in
+  the **Starred** group at the top of the view; click one to jump there.
 - **Select Section**: selects every cell (notebook) or line (Markdown) of the
   section, subsections included, and moves focus to the editor. Then use
   `Cmd+X` / `Cmd+V` to move it, `Cmd+C` to copy it, or run or delete the
@@ -143,13 +162,22 @@ Right-click a heading for:
   cell of the section, subsections included, e.g. to add `hide-output` to a
   whole analysis section in one go. Heading and text cells are left alone, so
   the section stays readable on the page.
-- **Copy Heading Text** and **Copy Heading Path**.
+- **Copy Heading Text**.
+- **Copy Section Reference**: the file, heading path and cell range (line
+  range in Markdown), e.g.
+  `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · cells 12–30`. Paste it
+  into an AI chat such as Claude Code to refer to that section; these tools
+  see selected text but not selected cells.
+- **Copy Section Content**: every cell (or line) of the section as plain text;
+  code cells are wrapped in ```` ``` ```` fences with their language.
 
 Select several headings with `Cmd`/`Ctrl`-click or `Shift`-click, then
-right-click one of them: **Select Section** selects all their sections at once
-(nested or adjacent sections are merged, so no cell is selected twice), and the
-copy commands copy one line per heading, and **Edit Section Tags…** tags the
-code cells of all of them.
+right-click one of them: **Set Status…** and the star commands mark all of
+them, **Select Section** selects all their sections at once (nested or
+adjacent sections are merged, so no cell is selected twice), **Edit Section
+Tags…** tags the code cells of all of them, and the copy commands copy one
+line per heading (Copy Section Content: one block of text), in document
+order.
 
 To tag a cell, click **Tags** at the bottom right of the cell (it shows the
 number of tags once there are some), check or uncheck tags, or type a new one,
@@ -188,6 +216,33 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
 | `notebookHeadings.cellTagButton` | `true` | Show the Tags button on code cells. |
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |
+| `notebookHeadings.inProgressMarkers` | `["???", "？？？"]` | Text that makes a heading show as In progress; `[]` turns it off. |
+
+### Status marks and stars
+
+| Icon | Status | In summaries |
+| --- | --- | --- |
+| pink circle with a ring | TODO | `○` |
+| teal circle with a play arrow | In progress (also any heading containing `???`) | `➤` |
+| indigo circle with a question mark | To check | `?` |
+| green circle with a check | Finished | `✓` |
+| gold circle with a star | Starred (a small star over a status icon) | `★` |
+
+A first-level section that holds statuses shows them as a 2×2 grid of small
+icons instead: top left TODO, top right In progress, bottom left To check,
+bottom right Finished. **Show Marked Headings** lists starred headings and
+open statuses (TODO, In progress, To check), not finished ones.
+
+### Where marks are stored
+
+Statuses and stars are saved in the Jupyter metadata of the cell that holds the
+heading, e.g. `"notebook_headings": {"0": {"status": "todo", "star": true}}`
+(`"0"` is the first heading of that cell). They survive renaming the heading,
+moving the cell and copying the file to another computer; Jupyter, Jupyter
+Book and nbconvert ignore them. Like any edit, save the notebook to keep them.
+Marks are available in notebooks only; in Markdown files, `???` still works.
+A mark belongs to the n-th heading of its cell, so adding a heading above
+another one *in the same cell* moves that cell's marks down by one.
 
 ### Custom colors
 
@@ -226,6 +281,8 @@ To set colors for one theme only, nest them under the theme name, e.g.
   (Setext, `===` / `---`) headings or HTML `<h2>` tags.
 - Label colors rely on VS Code's file-decoration mechanism, which is why every
   heading has an icon in front of it.
+- The grey text after a heading can only hold plain text, so mark summaries
+  use symbols (`○ ➤ ? ✓ ★`) rather than the colored icons.
 
 ## Contributing
 

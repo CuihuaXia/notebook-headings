@@ -1,15 +1,13 @@
 {
-  "extension.description": "A heading outline for Jupyter notebooks and Markdown files that opens expanded only to a chosen level.",
+  "extension.description": "A heading outline for Jupyter notebooks and Markdown files that opens expanded only to a chosen level, with status marks, stars and section tools.",
   "view.welcome": "Open a Jupyter notebook or a Markdown file to see its headings.",
   "command.quickJump": "Notebook Headings: Go to Heading…",
   "command.filter": "Filter Headings",
   "command.clearFilter": "Clear Filter",
   "command.toggleNumbering": "Toggle Heading Numbers",
   "command.resetExpansion": "Collapse to Default Level",
-  "command.refresh": "Refresh",
   "command.reveal": "Go to Heading",
   "command.copyTitle": "Copy Heading Text",
-  "command.copyPath": "Copy Heading Path",
   "command.selectSection": "Select Section",
   "config.defaultExpandLevel": "Deepest heading level visible when a notebook is opened. Deeper headings are kept but start collapsed (2 = show # and ##, with ## collapsed).",
   "config.numbering": "Show outline numbers (1, 1.1, 1.1.1 ...) before headings.",
@@ -28,5 +26,12 @@
   "color.level6": "Notebook Headings: color of level-6 section headings (gray; used for ###### when a document has several # headings).",
   "command.editCellTags": "Notebook Headings: Edit Cell Tags…",
   "config.cellTagButton": "Show a Tags button at the bottom right of code cells (and of Markdown cells that already have tags). Clicking it opens a checklist of the collapse tags (hide-output, hide-input, hide-cell) to set the cell's tags; this edits only the tags in the cell metadata and can be undone.",
-  "command.editSectionTags": "Edit Section Tags…"
+  "command.editSectionTags": "Edit Section Tags…",
+  "command.copyReference": "Copy Section Reference",
+  "command.setStatus": "Set Status…",
+  "command.addStar": "Add Star",
+  "command.removeStar": "Remove Star",
+  "command.showMarked": "Show Marked Headings",
+  "command.copyContent": "Copy Section Content",
+  "config.inProgressMarkers": "Headings whose text contains one of these markers show as \"In progress\" without setting a status, e.g. \"## ??? Analysis\". An empty list turns this off."
 }

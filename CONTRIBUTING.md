@@ -42,10 +42,14 @@ Window** in that window.
   through `vscode.l10n.t('…')` in `src/extension.js`; its Chinese translations
   are in `l10n/bundle.l10n.zh-cn.json`, keyed by the English text. Add a
   translation whenever you add or change user-facing text.
-- Never change the user's code, text or outputs. The one allowed edit is a
-  cell's tags, made only through the tag picker as a single undoable
-  `WorkspaceEdit`. Tag picker logic lives in `src/tags.js` (tested in
-  `test/tags.test.js`).
+- Never change the user's code, text or outputs. The only allowed edits are
+  cell metadata the user sets explicitly — a cell's tags (tag picker) and a
+  heading's marks (Set Status, Add Star) — each as a single undoable
+  `WorkspaceEdit`. Tag picker logic lives in `src/tags.js` and mark logic in
+  `src/marks.js` (tested in `test/tags.test.js` and `test/marks.test.js`).
+- The status and star icons in `media/status/` are generated from the colors
+  in `src/marks.js` by `scripts/status-icons.js`. After changing a color or a
+  glyph, run `npm run icons`; `npm test` checks that the files match.
 - README images and links use relative paths. When the extension is packaged,
   `vsce` rewrites them to `https://github.com/CuihuaXia/notebook-headings/…`
   URLs, because VS Code's extension details page only loads `https:` images.
@@ -58,15 +62,20 @@ notebook-headings/
 ├── src/
 │   ├── extension.js      VS Code integration: tree view, commands, events
 │   ├── headings.js       pure logic: parsing, tree, numbering, filter (no VS Code API)
+│   ├── marks.js          pure logic of heading status and star marks (no VS Code API)
 │   └── tags.js           pure logic of the cell tag picker (no VS Code API)
 ├── test/
 │   ├── headings.test.js  unit tests for src/headings.js (`npm test`)
+│   ├── marks.test.js     unit tests for src/marks.js
 │   └── tags.test.js      unit tests for src/tags.js
 ├── examples/             sample.ipynb and sample.md to try the extension on
 ├── media/
 │   ├── headings.svg      activity bar icon
 │   ├── icon.png          extension icon (Extensions view / Marketplace)
+│   ├── status/           status and star icons (generated, see scripts/)
 │   └── screenshots/      README screenshots (not packaged in the .vsix)
+├── scripts/
+│   └── status-icons.js   generates media/status/ (`npm run icons`)
 ├── releases/             built .vsix packages
 ├── .vscode/launch.json   F5 launch configuration
 ├── l10n/                 runtime text translations (bundle.l10n.zh-cn.json)
