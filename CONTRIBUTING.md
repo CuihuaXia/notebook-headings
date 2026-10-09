@@ -36,10 +36,10 @@ download) with the extension loaded from source, runs
 throwaway settings folder and copies of the example files, so your own setup
 and `examples/` are not touched. Set `VSCODE_BIN` to the VS Code executable if
 it is not in the default macOS location. The tests cover what unit tests
-cannot: the status bar after a jump, marks written to real documents and
-to the Markdown marks file (including renames and outside changes), the mark filter, and Clear Section Outputs. They
-reach the extension's internals through the `__test` object returned by
-`activate()`, which is not an API.
+cannot: the status bar after a jump, marks saved to the marks file
+(including renames, outside changes and the safety rules below), the mark
+filter, and Clear Section Outputs. They reach the extension's internals
+through the `__test` object returned by `activate()`, which is not an API.
 
 ## Making changes
 
@@ -72,11 +72,11 @@ reach the extension's internals through the `__test` object returned by
     repository;
   - run git only through `git()`, which refuses folders outside a trusted
     workspace folder and turns `core.fsmonitor` off;
-  - when moving marks, save under the new name before removing the old one.
+  - when moving marks, save under the new name before removing the old one;
   - `.gitignore` changes (Fix .gitignore) are verified with git and rolled
-    back when they would not help. Tag picker logic lives in
-  `src/tags.js` and mark logic in `src/marks.js` (tested in
-  `test/tags.test.js` and `test/marks.test.js`).
+    back when they would not help.
+- Tag picker logic lives in `src/tags.js` and mark logic in `src/marks.js`
+  (tested in `test/tags.test.js` and `test/marks.test.js`).
 - The status and star icons in `media/status/` are generated from the colors
   in `src/marks.js` by `scripts/status-icons.js`. After changing a color or a
   glyph, run `npm run icons`; `npm test` checks that the files match.

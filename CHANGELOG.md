@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.2 — 2026-10-09
+
+**Changed**
+
+- Wording in CONTRIBUTING.md and a code comment.
+
 ## 1.6.1 — 2026-10-08
 
 **Changed**

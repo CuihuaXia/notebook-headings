@@ -276,10 +276,11 @@ const MARKS_FILE = path.join('.vscode', 'notebook-headings.json');
  *
  *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "text": "Setup" } } } }
  *
- * The root is the workspace folder that holds the document, or the
- * document's own folder when it is outside every workspace folder; keys are
- * paths relative to the root, with `/`. Each entry maps a heading's index in
- * the document to its mark (see src/marks.js). The file is read on every
+ * The root is the git repository holding the document when that repository
+ * is inside the workspace folder, else the workspace folder, else the
+ * document's own folder (see location()); keys are paths relative to the
+ * root, with `/`. Each entry maps a heading's index in the document to its
+ * mark (see src/marks.js). The file is read on every
  * redraw (it is small), so a `git pull` shows up right away; it is deleted
  * when no mark is left. Documents that are not on disk (untitled or remote
  * virtual files) fall back to VS Code's workspace storage.
