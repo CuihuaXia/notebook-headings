@@ -1,5 +1,5 @@
 {
-  "extension.description": "为 Jupyter notebook 和 Markdown 文件提供分级标题目录，打开时只展开到指定层级，支持状态标记、星标和整节操作。",
+  "extension.description": "为大型 Jupyter notebook 和 Markdown 提供标题目录：打开时只展开到指定层级，带编号、状态标记、星标、cell 标签和整节操作。",
   "view.welcome": "打开一个 Jupyter notebook 或 Markdown 文件，即可查看它的标题。",
   "command.quickJump": "Notebook Headings：跳转到标题…",
   "command.filter": "筛选标题",

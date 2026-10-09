@@ -1,8 +1,8 @@
 {
   "name": "notebook-headings",
-  "displayName": "Notebook Headings",
+  "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -27,13 +27,28 @@
     "toc",
     "myst",
     "todo",
-    "bookmarks"
+    "bookmarks",
+    "jupyter notebook",
+    "ipynb",
+    "notebook outline",
+    "markdown outline",
+    "navigation",
+    "navigator",
+    "sections",
+    "collapse",
+    "fold",
+    "status",
+    "star",
+    "cell tags",
+    "jupyter book",
+    "large notebook"
   ],
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
     "Notebooks",
+    "Data Science",
     "Other"
   ],
   "main": "./src/extension.js",

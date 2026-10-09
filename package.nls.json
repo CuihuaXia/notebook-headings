@@ -1,5 +1,5 @@
 {
-  "extension.description": "A heading outline for Jupyter notebooks and Markdown files that opens expanded only to a chosen level, with status marks, stars and section tools.",
+  "extension.description": "Heading outline for large Jupyter notebooks and Markdown: opens collapsed to a chosen level, with numbering, status marks, stars, cell tags and section tools.",
   "view.welcome": "Open a Jupyter notebook or a Markdown file to see its headings.",
   "command.quickJump": "Notebook Headings: Go to Heading…",
   "command.filter": "Filter Headings",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1 — 2026-10-09
+
+**Changed**
+
+- Marketplace listing: a clearer name and description, more search keywords,
+  and the Data Science category.
+- README screenshot updated for 1.7 (`???` shows as To check).
+
 ## 1.7.0 — 2026-10-09
 
 **Changed**
