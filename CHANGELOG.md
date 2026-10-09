@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0 — 2026-10-09
+
+**Changed**
+
+- **Show Marked Headings** (bookmark button) shows every heading with a star
+  or any status, Finished included, in one click; the picker for a single
+  status or stars only is gone.
+- Headings containing `???` now count as **To check** instead of In
+  progress. The setting is renamed `notebookHeadings.toCheckMarkers` (was
+  `inProgressMarkers`); set it again if you had changed it.
+
 ## 1.6.2 — 2026-10-09
 
 **Changed**

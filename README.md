@@ -61,15 +61,15 @@ you see the structure first and drill down on demand.
   Tags are stored where Jupyter, Jupyter Book and nbconvert read them.
 - **Status marks.** Right-click a heading → **Set Status…** to mark it TODO,
   In progress, To check or Finished; its level shape turns into a filled,
-  colored status icon. Headings containing `???` count as In progress
+  colored status icon. Headings containing `???` count as To check
   automatically.
 - **Stars.** **Add Star** puts a gold star icon before a heading and lists it
   in a **Starred** group at the top of the view, one click away.
 - **Marks stay visible when collapsed.** Every parent sums up the marks below
   it, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check, ✓ Finished,
-  ★ starred), and the bookmark button shows only marked headings — all,
-  starred, or one status such as TODO. Marks are kept in the project, not in
-  your documents, so they follow you to another computer.
+  ★ starred), and the bookmark button shows only the marked headings.
+  Marks are kept in the project, not in your documents, so they follow you
+  to another computer.
 - **Clear a section's outputs** (right-click → **Clear Section Outputs…**):
   the output sizes show which sections make a notebook large; clear them in
   one step, after a confirmation, and undo with `Cmd+Z` if needed.
@@ -147,14 +147,14 @@ View toolbar, left to right:
 | Button | Action |
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
-| Show Marked Headings (bookmark) | Pick what to show, with counts: all marked headings (starred and open statuses), only starred ones, or one status (e.g. only TODO). Parents stay visible. ✕ goes back. |
+| Show Marked Headings (bookmark) | Only the headings with a star or any status, with their parents. ✕ goes back. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 
 Right-click a heading for:
 
 - **Set Status…**: TODO, In progress, To check, Finished, or Clear
-  Status. A heading whose text contains `???` counts as In progress until you
+  Status. A heading whose text contains `???` counts as To check until you
   set another status or remove the `???`.
 - **Add Star** / **Remove Star**: starred headings are listed in
   the **Starred** group at the top of the view; click one to jump there.
@@ -226,23 +226,22 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
 | `notebookHeadings.cellTagButton` | `true` | Show the Tags button on code cells. |
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |
-| `notebookHeadings.inProgressMarkers` | `["???", "？？？"]` | Text that makes a heading show as In progress; `[]` turns it off. |
+| `notebookHeadings.toCheckMarkers` | `["???", "？？？"]` | Text that makes a heading show as To check; `[]` turns it off. |
 
 ### Status marks and stars
 
 | Icon | Status | In summaries |
 | --- | --- | --- |
 | pink circle with a ring | TODO | `○` |
-| teal circle with a play arrow | In progress (also any heading containing `???`) | `➤` |
-| indigo circle with a question mark | To check | `?` |
+| teal circle with a play arrow | In progress | `➤` |
+| indigo circle with a question mark | To check (also any heading containing `???`) | `?` |
 | green circle with a check | Finished | `✓` |
 | gold circle with a star | Starred (a small star over a status icon) | `★` |
 
 A first-level section that holds statuses shows them as a 2×2 grid of small
 icons instead: top left TODO, top right In progress, bottom left To check,
-bottom right Finished. **Show Marked Headings** shows all marked headings
-(starred headings and open statuses: TODO, In progress, To check), only
-starred ones, or the headings with one status, including Finished.
+bottom right Finished. **Show Marked Headings** shows every heading with a
+star or any status, Finished included.
 
 ### Where marks are stored
 

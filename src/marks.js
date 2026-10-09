@@ -34,14 +34,13 @@ const MARKS_KEY = 'notebook_headings';
  *   codicons can be shown.
  * - `symbol` is a plain text character with that glyph's shape, used in a
  *   parent's summary (a tree item's description can only hold plain text).
- * - `open` statuses (not finished) are listed by Show Marked Headings.
  * Labels are English and translated at runtime through vscode.l10n.
  */
 const STATUSES = [
-  { id: 'todo', label: 'TODO', fill: '#E8538F', icon: 'circle-large-outline', symbol: '○', open: true },
-  { id: 'doing', label: 'In progress', fill: '#12A39B', icon: 'play', symbol: '➤', open: true },
-  { id: 'question', label: 'To check', fill: '#6E62E5', icon: 'question', symbol: '?', open: true },
-  { id: 'done', label: 'Finished', fill: '#2EA043', icon: 'check', symbol: '✓', open: false },
+  { id: 'todo', label: 'TODO', fill: '#E8538F', icon: 'circle-large-outline', symbol: '○' },
+  { id: 'doing', label: 'In progress', fill: '#12A39B', icon: 'play', symbol: '➤' },
+  { id: 'question', label: 'To check', fill: '#6E62E5', icon: 'question', symbol: '?' },
+  { id: 'done', label: 'Finished', fill: '#2EA043', icon: 'check', symbol: '✓' },
 ];
 
 /** Color of the starred-heading icon (white star on a gold circle). */
@@ -219,8 +218,8 @@ function combineMarks(headings, fileMarks, cellMarksAt) {
 }
 
 /**
- * Whether a heading's text contains one of the in-progress markers (by
- * default "???"), so headings already flagged by hand show as in progress.
+ * Whether a heading's text contains one of the to-check markers (by default
+ * "???"), so headings already flagged by hand show as To check.
  *
  * @param {string} text
  * @param {string[]} markers
@@ -250,13 +249,13 @@ function textsByContainer(flat, containerOf) {
 }
 
 /**
- * Set `status`, `autoStatus` and `star` on every node. An explicit status
- * wins over a marker in the text.
+ * Set `status`, `autoStatus` and `star` on every node. A marker in the text
+ * (see hasMarker()) means To check; an explicit status wins over it.
  *
  * @param {object[]} flat nodes in document order (with `pos` and `slot`)
  * @param {(key: *) => object} marksOf stored marks of a container, as
  *        returned by cleanMarks()
- * @param {string[]} markers in-progress markers
+ * @param {string[]} markers to-check markers
  * @param {(node: object) => *} [containerOf] a node's container; defaults to
  *        its cell (`pos`)
  */
@@ -267,12 +266,12 @@ function assignMarks(flat, marksOf, markers, containerOf = (n) => n.pos) {
     const mark = resolved.get(containerOf(node))[node.slot] || {};
     node.star = !!mark.star;
     node.autoStatus = !mark.status && hasMarker(node.text, markers);
-    node.status = mark.status || (node.autoStatus ? 'doing' : undefined);
+    node.status = mark.status || (node.autoStatus ? 'question' : undefined);
   }
 }
 
-/** Whether a node carries a mark worth listing (a star or an open status). */
-const isMarked = (node) => node.star || (!!node.status && statusById(node.status).open);
+/** Whether a node carries any mark (a star or a status). */
+const isMarked = (node) => node.star || !!node.status;
 
 /**
  * For every node, count the statuses and stars below it (not its own) in
@@ -342,32 +341,18 @@ function countsText(counts) {
 }
 
 /**
- * What "Show Marked Headings" can show: every marked heading (starred or
- * with an open status), only starred ones, or one status.
- */
-const MARK_FILTERS = ['marked', 'star', ...STATUSES.map((s) => s.id)];
-
-/** Whether a node passes a mark filter (see MARK_FILTERS). */
-function matchesMarkFilter(node, kind = 'marked') {
-  if (kind === 'marked') return isMarked(node);
-  if (kind === 'star') return !!node.star;
-  return node.status === kind;
-}
-
-/**
- * Like applyFilter() in headings.js, but keeps the headings that pass a mark
- * filter (see MARK_FILTERS) and their ancestors.
+ * "Show Marked Headings": like applyFilter() in headings.js, but keeps every
+ * marked heading (starred or with any status) and its ancestors.
  *
  * @param {object[]} roots
- * @param {string} [kind] 'marked' (default), 'star' or a status id
- * @returns {number} the number of headings that pass
+ * @returns {number} the number of marked headings
  */
-function applyMarkedFilter(roots, kind = 'marked') {
+function applyMarkedFilter(roots) {
   let count = 0;
   const walk = (node) => {
     node.matchAt = -1;
     const childVisible = node.children.map(walk).some(Boolean);
-    const hit = matchesMarkFilter(node, kind);
+    const hit = isMarked(node);
     if (hit) count++;
     node.visible = hit || childVisible;
     return node.visible;
@@ -379,7 +364,6 @@ function applyMarkedFilter(roots, kind = 'marked') {
 module.exports = {
   STATUSES,
   STAR_FILL,
-  MARK_FILTERS,
   statusById,
   cleanMarks,
   readMarks,
@@ -392,6 +376,5 @@ module.exports = {
   summarizeMarks,
   iconFile,
   countsText,
-  matchesMarkFilter,
   applyMarkedFilter,
 };

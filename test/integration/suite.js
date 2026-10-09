@@ -188,15 +188,21 @@ const tests = [
     },
   ],
   [
-    'Notebook: Show Marked Headings by status',
+    'Notebook: Show Marked Headings shows every marked heading and its parents',
     async () => {
       await openNotebook('showcase.ipynb');
-      provider().setMarkFilter('todo');
-      const shown = provider().flat.filter((n) => n.visible);
-      assert.ok(shown.some((n) => n.status === 'todo'));
-      assert.ok(shown.every((n) => n.status === 'todo' || n.children.some((c) => c.visible)));
-      provider().setMarkFilter(undefined);
+      await vscode.commands.executeCommand('notebookHeadings.showMarked');
+      const flat = provider().flat;
+      const marked = flat.filter((n) => n.star || n.status);
+      assert.ok(marked.some((n) => n.status === 'done'), 'finished headings are shown too');
+      assert.ok(marked.every((n) => n.visible));
+      assert.ok(flat.filter((n) => n.visible).every((n) => n.star || n.status || n.children.some((c) => c.visible)));
+      assert.equal(provider().markedCount, marked.length);
+      await vscode.commands.executeCommand('notebookHeadings.clearFilter');
       assert.ok(provider().flat.every((n) => n.visible));
+      const draft = flat.find((n) => n.autoStatus);
+      assert.ok(draft, 'showcase.ipynb has a heading with ???');
+      assert.equal(draft.status, 'question', '??? means To check');
     },
   ],
   [

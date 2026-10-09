@@ -80,22 +80,21 @@ test('assignMarks with one container for a whole Markdown file', () => {
   assert.deepEqual(flat.map((n) => n.status), [undefined, undefined, 'question']);
 });
 
-test('applyMarkedFilter by kind: all marked, starred, or one status', () => {
+test('applyMarkedFilter keeps every marked heading (any status or a star) and its parents', () => {
   const { roots, flat } = h.buildTree(h.parseNotebookHeadings([{ isMarkdown: true, text: '## A\n### A1\n### A2\n## B' }]), '', 1);
   const by = (t) => flat.find((n) => n.text === t);
   by('A1').status = 'todo';
   by('A2').status = 'done';
   by('B').star = true;
-  assert.equal(m.applyMarkedFilter(roots), 2, 'TODO and starred; Finished is not open');
-  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A1', 'B']);
-  assert.equal(m.applyMarkedFilter(roots, 'done'), 1);
-  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A2']);
-  assert.equal(m.applyMarkedFilter(roots, 'star'), 1);
-  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['B']);
-  assert.deepEqual(m.MARK_FILTERS, ['marked', 'star', 'todo', 'doing', 'question', 'done']);
+  assert.equal(m.applyMarkedFilter(roots), 3, 'TODO, Finished and starred');
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A1', 'A2', 'B']);
+  by('A2').status = undefined;
+  by('B').star = false;
+  assert.equal(m.applyMarkedFilter(roots), 1);
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A1']);
 });
 
-test('assignMarks: explicit status wins over ??? in the text', () => {
+test('assignMarks: ??? in the text means To check; an explicit status wins', () => {
   const cells = [
     { isMarkdown: true, text: '## ??? Draft\n### Plain' },
     { isMarkdown: true, text: '## ??? Overridden' },
@@ -107,7 +106,7 @@ test('assignMarks: explicit status wins over ??? in the text', () => {
   assert.deepEqual(
     flat.map((n) => [n.text, n.status, n.autoStatus, n.star]),
     [
-      ['??? Draft', 'doing', true, false],
+      ['??? Draft', 'question', true, false],
       ['Plain', 'todo', false, false],
       ['??? Overridden', 'done', false, false],
       ['Starred', undefined, false, true],
@@ -136,11 +135,11 @@ test('applyMarkedFilter keeps marked headings and their ancestors', () => {
   const cells = [{ isMarkdown: true, text: '# T\n## A\n### A1\n## B\n### B1' }];
   const { roots, flat } = h.buildTree(h.parseNotebookHeadings(cells), '', 1);
   flat.forEach((n) => ((n.star = n.text === 'A1'), (n.status = n.text === 'B1' ? 'done' : undefined)));
-  assert.equal(m.applyMarkedFilter(roots), 1);
-  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['T', 'A', 'A1']);
+  assert.equal(m.applyMarkedFilter(roots), 2);
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['T', 'A', 'A1', 'B', 'B1']);
 });
 
-test('every status has a unique id, a codicon, an icon file in its color; open ones a summary symbol', () => {
+test('every status has a unique id, a codicon, a summary symbol and an icon file in its color', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   assert.equal(new Set(m.STATUSES.map((s) => s.id)).size, m.STATUSES.length);

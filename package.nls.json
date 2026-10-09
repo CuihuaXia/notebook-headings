@@ -33,6 +33,6 @@
   "command.removeStar": "Remove Star",
   "command.showMarked": "Show Marked Headings…",
   "command.copyContent": "Copy Section Content",
-  "config.inProgressMarkers": "Headings whose text contains one of these markers show as \"In progress\" without setting a status, e.g. \"## ??? Analysis\". An empty list turns this off.",
+  "config.toCheckMarkers": "Headings whose text contains one of these markers show as \"To check\" without setting a status, e.g. \"## ??? Analysis\". An empty list turns this off.",
   "command.clearOutputs": "Clear Section Outputs…"
 }

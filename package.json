@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings",
   "description": "%extension.description%",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -339,7 +339,7 @@
           "default": true,
           "description": "%config.cellTagButton%"
         },
-        "notebookHeadings.inProgressMarkers": {
+        "notebookHeadings.toCheckMarkers": {
           "type": "array",
           "items": {
             "type": "string"
@@ -348,7 +348,7 @@
             "???",
             "？？？"
           ],
-          "description": "%config.inProgressMarkers%"
+          "description": "%config.toCheckMarkers%"
         }
       }
     },

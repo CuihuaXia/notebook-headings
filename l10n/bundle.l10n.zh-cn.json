@@ -50,7 +50,6 @@
   "current": "当前",
   "Clear Status": "清除状态",
   "Status of {0}": "设置 {0} 的状态",
-  "Notebook Headings: a heading whose text contains an in-progress marker (such as ???) still shows as in progress. Remove the marker from the text, or set the status to Finished.": "Notebook Headings：标题文字里带有进行中记号（如 ???）的，仍会显示为进行中。可以删掉标题里的记号，或者把状态设为已完成。",
   "Starred {0}": "已给 {0} 加星标",
   "Removed star from {0}": "已取消 {0} 的星标",
   "TODO": "待做",
@@ -63,11 +62,8 @@
   "Clear the outputs of {0} in {1}?": "清除 {1} 中 {0} 的输出？",
   "Cleared outputs of {0}": "已清除 {0} 的输出",
   "Code is kept. Undo with {0}.": "代码会保留。可用 {0} 撤销。",
-  "Marked headings": "有标记的标题",
   "Notebook Headings: no starred headings or statuses yet. Right-click a heading to set one.": "Notebook Headings：还没有星标或状态。右键点击标题即可设置。",
   "Notebook Headings: this section has no outputs.": "Notebook Headings：本节没有输出。",
-  "Show headings that are…": "只显示这些标题…",
-  "starred and open · {0}": "星标和未完成 · {0}",
   "{0} sections": "{0} 个小节",
   "Notebook Headings: could not save the marks ({0}).": "Notebook Headings：无法保存标记（{0}）。",
   "Open {0}": "打开 {0}",
@@ -80,5 +76,7 @@
   "Notebook Headings: .gitignore was left unchanged: git would still ignore the marks file (is the project folder itself ignored?).": "Notebook Headings：没有修改 .gitignore，因为改了 git 仍会忽略标记文件（是不是整个项目文件夹都被忽略了？）。",
   "Notebook Headings: updated .gitignore; commit .vscode/notebook-headings.json to take your marks along.": "Notebook Headings：已更新 .gitignore。提交 .vscode/notebook-headings.json，标记就能跟着项目走。",
   "{0} is not valid JSON (a git merge conflict?). Fix it, then try again.": "{0} 不是有效的 JSON（是不是 git 合并冲突？）。请先修复它，再重试。",
-  "Open": "打开"
+  "Open": "打开",
+  "Marked headings · {0}": "有标记的标题 · {0}",
+  "Notebook Headings: a heading whose text contains a to-check marker (such as ???) still shows as To check. Remove the marker from the text, or set another status.": "Notebook Headings：标题文字里带有待核对记号（如 ???）的，仍会显示为\"待核对\"。可以删掉标题里的记号，或者设置成别的状态。"
 }

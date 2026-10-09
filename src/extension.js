@@ -43,9 +43,7 @@ const { COMMON_TAGS, isValidTag, multiPickerEntries, nextTagsMulti, sortKeysDeep
 const {
   STATUSES,
   statusById,
-  MARK_FILTERS,
   cleanMarks,
-  matchesMarkFilter,
   readMarks,
   resolveMarks,
   updateMarks,
@@ -772,12 +770,9 @@ class HeadingsProvider {
     /** tree item id -> heading node, rebuilt with the tree */
     this.byId = new Map();
     this.filter = '';
-    /**
-     * "Show Marked Headings": undefined (off), 'marked' (starred headings and
-     * open statuses), 'star' or a status id; see MARK_FILTERS in src/marks.js
-     */
-    this.markFilter = undefined;
-    /** headings passing markFilter */
+    /** "Show Marked Headings": only headings with a star or a status */
+    this.markedOnly = false;
+    /** number of marked headings, while markedOnly */
     this.markedCount = 0;
     /** the "Starred" group shown above the headings, or undefined */
     this.starGroup = undefined;
@@ -791,7 +786,7 @@ class HeadingsProvider {
 
   /** Whether the tree shows a filtered subset (text filter or marked only). */
   get filtering() {
-    return !!this.filter || !!this.markFilter;
+    return !!this.filter || this.markedOnly;
   }
 
   setSource(source) {
@@ -816,21 +811,21 @@ class HeadingsProvider {
   /** Text filter; replaces "Show Marked Headings". */
   setFilter(query) {
     this.filter = query.trim();
-    this.markFilter = undefined;
+    this.markedOnly = false;
     this.applyFilters();
     this._onDidChange.fire();
   }
 
-  /** "Show Marked Headings" with a kind (see markFilter), or off; replaces the text filter. */
-  setMarkFilter(kind) {
-    this.markFilter = kind;
+  /** "Show Marked Headings" on or off; replaces the text filter. */
+  setMarkedOnly(on) {
+    this.markedOnly = on;
     this.filter = '';
     this.applyFilters();
     this._onDidChange.fire();
   }
 
   applyFilters() {
-    if (this.markFilter) this.markedCount = applyMarkedFilter(this.roots, this.markFilter);
+    if (this.markedOnly) this.markedCount = applyMarkedFilter(this.roots);
     else applyFilter(this.roots, this.filter);
   }
 
@@ -856,7 +851,7 @@ class HeadingsProvider {
       assignNumbers(this.roots, setting('numberH1', false));
       assignColorRanks(this.flat);
       // Marks are already matched to headings: one container, slots = indexes.
-      assignMarks(this.flat, () => marks, setting('inProgressMarkers', ['???', '？？？']), () => 0);
+      assignMarks(this.flat, () => marks, setting('toCheckMarkers', ['???', '？？？']), () => 0);
       summarizeMarks(this.roots);
       const starred = this.flat.filter((n) => n.star);
       if (starred.length) {
@@ -938,7 +933,7 @@ class HeadingsProvider {
     // Filtered views get their own ids so their all-expanded state never
     // leaks into the normal tree; starred shortcuts have their own too.
     if (ref) item.id = `${node.id}|starred`;
-    else if (this.markFilter) item.id = `${node.id}|marked:${this.markFilter}`;
+    else if (this.markedOnly) item.id = `${node.id}|marked`;
     else item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
     // Menus in package.json tell headings (and starred ones) apart by this.
     item.contextValue = node.star ? 'heading.starred' : 'heading';
@@ -1167,7 +1162,7 @@ function activate(context) {
   const updateFilterUi = () => {
     const q = provider.filter;
     const matches = q ? provider.flat.filter((n) => n.matchAt >= 0).length : 0;
-    if (provider.markFilter) view.description = `${markFilterLabel(provider.markFilter)} · ${provider.markedCount}`;
+    if (provider.markedOnly) view.description = t('Marked headings · {0}', provider.markedCount);
     else view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
     vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', provider.filtering);
   };
@@ -1182,45 +1177,15 @@ function activate(context) {
     updateFilterUi();
   };
 
-  /** Short name of a mark filter kind, for the view description and the picker. */
-  const markFilterLabel = (kind) => {
-    if (kind === 'marked') return t('Marked headings');
-    if (kind === 'star') return t('Starred');
-    return t(statusById(kind).label);
-  };
-
-  /**
-   * "Show Marked Headings": pick what to show — every marked heading
-   * (starred or with an open status), only starred ones, or one status —
-   * with the number of headings each choice shows.
-   */
-  const showMarked = async () => {
-    const count = (kind) => provider.flat.filter((n) => matchesMarkFilter(n, kind)).length;
+  /** "Show Marked Headings": only headings with a star or a status, and their parents. */
+  const showMarked = () => {
     if (!provider.flat.some((n) => n.star || n.status)) {
       vscode.window.showInformationMessage(t('Notebook Headings: no starred headings or statuses yet. Right-click a heading to set one.'));
       return;
     }
-    const icon = (kind) => (kind === 'marked' ? 'bookmark' : kind === 'star' ? 'star-full' : statusById(kind).icon);
-    const items = MARK_FILTERS.map((kind) => ({
-      label: `$(${icon(kind)}) ${markFilterLabel(kind)}`,
-      description: kind === 'marked' ? t('starred and open · {0}', count(kind)) : `${count(kind)}`,
-      kind,
-    }));
-    const qp = vscode.window.createQuickPick();
-    qp.items = items;
-    qp.placeholder = t('Show headings that are…');
-    const current = items.find((i) => i.kind === (provider.markFilter || 'marked'));
-    if (current) qp.activeItems = [current];
-    qp.onDidAccept(() => {
-      const [pick] = qp.selectedItems;
-      qp.hide();
-      if (!pick) return;
-      provider.setMarkFilter(pick.kind);
-      lastRevealed = undefined;
-      updateFilterUi();
-    });
-    qp.onDidHide(() => qp.dispose());
-    qp.show();
+    provider.setMarkedOnly(true);
+    lastRevealed = undefined;
+    updateFilterUi();
   };
   const liveFilter = debounce(setFilter, 120);
 
@@ -1663,7 +1628,7 @@ function activate(context) {
     const after = nodes.map((n) => provider.byId.get(n.id)).filter(Boolean);
     if (pick.id === null && after.some((n) => n.autoStatus)) {
       vscode.window.showInformationMessage(
-        t('Notebook Headings: a heading whose text contains an in-progress marker (such as ???) still shows as in progress. Remove the marker from the text, or set the status to Finished.')
+        t('Notebook Headings: a heading whose text contains a to-check marker (such as ???) still shows as To check. Remove the marker from the text, or set another status.')
       );
     }
   };
