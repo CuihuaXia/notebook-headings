@@ -272,7 +272,7 @@ const MARKS_FILE = path.join('.vscode', 'notebook-headings.json');
 /**
  * Where marks are kept: `.vscode/notebook-headings.json` in the project, for
  * notebooks and Markdown files alike, so they travel with the project (git,
- * Dropbox, another computer) and the documents themselves are never changed:
+ * a cloud drive, another computer) and the documents themselves are never changed:
  *
  *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "text": "Setup" } } } }
  *

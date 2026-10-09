@@ -250,7 +250,7 @@ Marks are not written into your documents. They are kept in
 `.vscode/notebook-headings.json` in the project (the git repository or
 workspace folder holding the document, or else its own folder), by relative
 path. Keep that file with the project —
-commit it, or sync the folder with Dropbox / iCloud — and your marks are there
+commit it, or sync the folder with a cloud drive — and your marks are there
 on any computer.
 
 - **If git ignores that file** (e.g. a `.vscode/` line in `.gitignore`), the

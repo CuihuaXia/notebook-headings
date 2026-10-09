@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 — 2026-10-08
+
+**Changed**
+
+- Wording in the README and a code comment.
+
 ## 1.6.0 — 2026-10-08
 
 **New**

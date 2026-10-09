@@ -147,7 +147,7 @@ code --install-extension releases/notebook-headings-<version>.vsix
 
 ### 标记保存在哪里
 
-标记不会写进你的文档，而是保存在项目里的 `.vscode/notebook-headings.json`（项目指包含这个文档的 git 仓库或工作区文件夹，都没有时就是文档所在的文件夹），按相对路径记录。让这个文件跟着项目走（提交到 git，或者用 Dropbox / iCloud 同步文件夹），在哪台电脑上都能看到标记。
+标记不会写进你的文档，而是保存在项目里的 `.vscode/notebook-headings.json`（项目指包含这个文档的 git 仓库或工作区文件夹，都没有时就是文档所在的文件夹），按相对路径记录。让这个文件跟着项目走（提交到 git，或者用网盘同步文件夹），在哪台电脑上都能看到标记。
 
 - **如果 git 忽略了这个文件**（比如 `.gitignore` 里有一行 `.vscode/`），插件会在每个项目里提醒一次；点 **修复 .gitignore** 会加几行规则，让 git 只保留这一个文件。手动改的话，加这三行：`!/.vscode/`、`/.vscode/*`、`!/.vscode/notebook-headings.json`（如果没有忽略整个 `.vscode` 文件夹，只需最后一行）。
 - **被 git 忽略的文档**：标记只保存在这台电脑上，这样私人文件的路径和标题不会进入仓库。（没有作为工作区文件夹打开的 git 仓库里的文件也一样。）
