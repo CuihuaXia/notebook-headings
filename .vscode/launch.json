@@ -8,6 +8,19 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/examples"]
+    },
+    {
+      // For README screenshots: other installed extensions are turned off so
+      // their decorations and status bar items stay out of the picture.
+      "name": "Screenshots (no other extensions)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extensions",
+        "${workspaceFolder}/examples",
+        "${workspaceFolder}/examples/showcase.ipynb"
+      ]
     }
   ]
 }

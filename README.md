@@ -10,7 +10,7 @@ notebook with 1,000+ headings. Notebook Headings keeps all six heading levels
 but opens the tree expanded only to the level you choose (default: `##`), so
 you see the structure first and drill down on demand.
 
-<img src="media/screenshots/notebook.png" alt="Notebook Headings view for a Jupyter notebook: numbered, color-coded headings with cell counts and the right-click copy menu" width="800">
+<img src="media/screenshots/notebook.png" alt="Notebook Headings view for a Jupyter notebook: a Starred group, numbered and color-coded headings with status icons, cell counts, output sizes and mark summaries, and the right-click menu" width="800">
 
 ## Quick start
 
@@ -65,17 +65,22 @@ you see the structure first and drill down on demand.
   automatically.
 - **Stars.** **Add Star** puts a gold star icon before a heading and lists it
   in a **Starred** group at the top of the view, one click away.
-- **Marks stay visible when collapsed.** Every parent shows the marks below
-  it, at any depth, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check,
-  ✓ Finished, ★ starred), and first-level sections show a small icon for
-  every status they hold. The bookmark button in the toolbar shows only marked
-  headings. Marks are saved in the notebook, so they travel with the file.
-- **Safe by design.** The extension never changes your code, text or outputs.
-  The only edits it ever makes are cell metadata you set yourself — a cell's
-  tags or a heading's marks — and each can be undone with `Cmd+Z`.
+- **Marks stay visible when collapsed.** Every parent sums up the marks below
+  it, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check, ✓ Finished,
+  ★ starred), and the bookmark button shows only marked headings — all,
+  starred, or one status such as TODO. Marks are kept in the project, not in
+  your documents, so they follow you to another computer.
+- **Clear a section's outputs** (right-click → **Clear Section Outputs…**):
+  the output sizes show which sections make a notebook large; clear them in
+  one step, after a confirmation, and undo with `Cmd+Z` if needed.
+- **Safe by design.** The extension never changes your code or text, and
+  changes a notebook only when you ask it to: a cell's tags (cell metadata)
+  or clearing a section's outputs after confirming, each undoable with
+  `Cmd+Z`. Marks never touch your documents.
 
-Markdown parsing ignores YAML front matter and fenced code blocks, so
-`# comments` inside code are never mistaken for headings.
+Markdown parsing ignores YAML front matter, fenced code blocks and HTML
+comments, so `# comments` inside code and headings commented out are never
+mistaken for headings. Underlined (setext) headings are recognised too.
 
 <img src="media/screenshots/markdown.png" alt="Notebook Headings view for a Markdown file; the # comment inside a code block is not listed as a heading" width="800">
 
@@ -142,16 +147,16 @@ View toolbar, left to right:
 | Button | Action |
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
-| Show Marked Headings (bookmark) | Only starred headings and open statuses (TODO, In progress, To check), with their parents. ✕ goes back. |
+| Show Marked Headings (bookmark) | Pick what to show, with counts: all marked headings (starred and open statuses), only starred ones, or one status (e.g. only TODO). Parents stay visible. ✕ goes back. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 
 Right-click a heading for:
 
-- **Set Status…** (notebooks): TODO, In progress, To check, Finished, or Clear
+- **Set Status…**: TODO, In progress, To check, Finished, or Clear
   Status. A heading whose text contains `???` counts as In progress until you
   set another status or remove the `???`.
-- **Add Star** / **Remove Star** (notebooks): starred headings are listed in
+- **Add Star** / **Remove Star**: starred headings are listed in
   the **Starred** group at the top of the view; click one to jump there.
 - **Select Section**: selects every cell (notebook) or line (Markdown) of the
   section, subsections included, and moves focus to the editor. Then use
@@ -170,10 +175,15 @@ Right-click a heading for:
   see selected text but not selected cells.
 - **Copy Section Content**: every cell (or line) of the section as plain text;
   code cells are wrapped in ```` ``` ```` fences with their language.
+- **Clear Section Outputs…** (notebooks): removes the outputs of every code
+  cell in the section, subsections included, after asking (the question names
+  the number of cells and their size). Code, tags and execution counts stay;
+  `Cmd+Z` brings the outputs back. Use the output sizes in the tree to find
+  the sections worth clearing.
 
 Select several headings with `Cmd`/`Ctrl`-click or `Shift`-click, then
 right-click one of them: **Set Status…** and the star commands mark all of
-them, **Select Section** selects all their sections at once (nested or
+them, **Clear Section Outputs…** clears all of them, **Select Section** selects all their sections at once (nested or
 adjacent sections are merged, so no cell is selected twice), **Edit Section
 Tags…** tags the code cells of all of them, and the copy commands copy one
 line per heading (Copy Section Content: one block of text), in document
@@ -230,19 +240,34 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 
 A first-level section that holds statuses shows them as a 2×2 grid of small
 icons instead: top left TODO, top right In progress, bottom left To check,
-bottom right Finished. **Show Marked Headings** lists starred headings and
-open statuses (TODO, In progress, To check), not finished ones.
+bottom right Finished. **Show Marked Headings** shows all marked headings
+(starred headings and open statuses: TODO, In progress, To check), only
+starred ones, or the headings with one status, including Finished.
 
 ### Where marks are stored
 
-Statuses and stars are saved in the Jupyter metadata of the cell that holds the
-heading, e.g. `"notebook_headings": {"0": {"status": "todo", "star": true}}`
-(`"0"` is the first heading of that cell). They survive renaming the heading,
-moving the cell and copying the file to another computer; Jupyter, Jupyter
-Book and nbconvert ignore them. Like any edit, save the notebook to keep them.
-Marks are available in notebooks only; in Markdown files, `???` still works.
-A mark belongs to the n-th heading of its cell, so adding a heading above
-another one *in the same cell* moves that cell's marks down by one.
+Marks are not written into your documents. They are kept in
+`.vscode/notebook-headings.json` in the project (the git repository or
+workspace folder holding the document, or else its own folder), by relative
+path. Keep that file with the project —
+commit it, or sync the folder with Dropbox / iCloud — and your marks are there
+on any computer.
+
+- **If git ignores that file** (e.g. a `.vscode/` line in `.gitignore`), the
+  extension tells you once per project; **Fix .gitignore** adds the lines that
+  let git keep just this file. By hand:
+  `!/.vscode/`, `/.vscode/*` and `!/.vscode/notebook-headings.json` (only the
+  last one if the whole `.vscode` folder is not ignored).
+- **Documents that git ignores** keep their marks on this computer only, so a
+  private file's path and headings never reach the repository. (So do files
+  of a git repository that is not open as a workspace folder.)
+- Renaming, moving or deleting a document in VS Code updates its marks, and
+  changes that arrive with a `git pull` show up right away.
+- A mark follows its heading's text, so editing other headings does not move it.
+- If a merge leaves conflict markers in the file, marks are paused until you
+  resolve them; the file is never overwritten.
+- Marks that version 1.5 saved inside notebook cells still work, and move to
+  the file the next time you change them.
 
 ### Custom colors
 
@@ -277,12 +302,21 @@ To set colors for one theme only, nest them under the theme name, e.g.
 
 - VS Code does not let extensions change font size or weight in tree views,
   so levels are distinguished by color, icon shape and indentation only.
-- Only ATX headings (`#`, `##`, …) are recognised, not underlined
-  (Setext, `===` / `---`) headings or HTML `<h2>` tags.
+- ATX headings (`#`, `##`, …) and underlined (setext, `===` / `---`)
+  headings are recognised, but not HTML `<h2>` tags. Headings inside fenced
+  code blocks and HTML comments (`<!-- … -->`) are ignored.
+- A notebook cell can hold several headings, but the cursor and the scroll
+  position are known only to the cell: when you move through the notebook,
+  the tree and status bar show the cell's last heading (or the one you just
+  clicked).
 - Label colors rely on VS Code's file-decoration mechanism, which is why every
   heading has an icon in front of it.
 - The grey text after a heading can only hold plain text, so mark summaries
   use symbols (`○ ➤ ? ✓ ★`) rather than the colored icons.
+- Marks (see [Where marks are stored](#where-marks-are-stored)) cannot be
+  undone with `Cmd+Z`, are lost when a document is renamed outside VS Code
+  (Finder, `git mv`), and may move to the nearest same-named heading when one
+  of several headings with the same text is renamed.
 
 ## Contributing
 

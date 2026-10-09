@@ -13,15 +13,86 @@ test('readMarks keeps valid entries only', () => {
   assert.deepEqual(m.readMarks({ notebook_headings: [1] }), {});
 });
 
-test('withMark sets, clears and removes empty entries without touching other metadata', () => {
-  const base = { tags: ['hide-input'] };
-  const a = m.withMark(base, 0, { status: 'doing' });
-  assert.deepEqual(a, { tags: ['hide-input'], notebook_headings: { 0: { status: 'doing' } } });
-  assert.deepEqual(base, { tags: ['hide-input'] }, 'input is not modified');
-  const b = m.withMark(a, 1, { star: true });
-  assert.deepEqual(b.notebook_headings, { 0: { status: 'doing' }, 1: { star: true } });
-  const c = m.withMark(m.withMark(b, 0, { status: null }), 1, { star: false });
-  assert.deepEqual(c, { tags: ['hide-input'] });
+test('combineMarks: marks from the file win; 1.5 marks in cell metadata fill in', () => {
+  const cells = [
+    { isMarkdown: true, text: '## A\n## B' },
+    { isMarkdown: false, text: '' },
+    { isMarkdown: true, text: '## C' },
+  ];
+  const headings = h.parseNotebookHeadings(cells).map((x, i) => ({ ...x, cellSlot: x.slot, slot: i }));
+  const fileMarks = { 2: { status: 'done', text: 'C' } };
+  const cellMarks = [{ 1: { status: 'todo' } }, {}, { 0: { status: 'question' } }];
+  const { marks, legacy } = m.combineMarks(headings, fileMarks, (pos) => cellMarks[pos]);
+  assert.deepEqual(marks, { 1: { status: 'todo', text: 'B' }, 2: { status: 'done', text: 'C' } });
+  assert.deepEqual([...legacy], [1], 'only B still comes from cell metadata');
+  assert.deepEqual(m.combineMarks(headings, {}, () => ({})), { marks: {}, legacy: new Set() });
+});
+
+test('resolveMarks keeps a mark on its heading when headings are added, removed or renamed', () => {
+  const saved = { 1: { status: 'todo', text: 'B' } };
+  assert.deepEqual(m.resolveMarks(saved, ['A', 'B']), [undefined, { status: 'todo' }]);
+  // A heading inserted above B in the same cell: the mark follows B's text.
+  assert.deepEqual(m.resolveMarks(saved, ['New', 'A', 'B']), [undefined, undefined, { status: 'todo' }]);
+  // A removed: B is now slot 0.
+  assert.deepEqual(m.resolveMarks(saved, ['B']), [{ status: 'todo' }]);
+  // B renamed: no text matches, so the mark stays at its slot.
+  assert.deepEqual(m.resolveMarks(saved, ['A', 'B v2']), [undefined, { status: 'todo' }]);
+  // Duplicate texts: `n` says which occurrence (0 = the first, the default).
+  assert.deepEqual(m.resolveMarks({ 1: { star: true, text: 'X' } }, ['X', 'X']), [{ star: true }, undefined]);
+  assert.deepEqual(m.resolveMarks({ 1: { star: true, text: 'X', n: 1 } }, ['X', 'X']), [undefined, { star: true }]);
+  // Marks saved without text (version 1.5) use their slot.
+  assert.deepEqual(m.resolveMarks({ 0: { status: 'done' } }, ['A']), [{ status: 'done' }]);
+  // A text match wins over an old slot-only mark at the same slot.
+  assert.deepEqual(m.resolveMarks({ 0: { star: true }, 1: { status: 'todo', text: 'A' } }, ['A', 'B']), [
+    { status: 'todo' },
+    undefined,
+  ]);
+  // A mark whose heading is gone is dropped.
+  assert.deepEqual(m.resolveMarks({ 3: { status: 'todo', text: 'Gone' } }, ['A']), [undefined]);
+});
+
+test('marks on headings that share a text follow the right one', () => {
+  const pick = (r) => r.map((v, i) => (v ? i : null)).filter((v) => v !== null);
+  const texts = ['Intro', 'Summary', 'x', 'Summary', 'Summary'];
+  const saved = m.updateMarks({}, texts, 4, { status: 'todo' });
+  assert.deepEqual(saved, { 4: { status: 'todo', text: 'Summary', n: 2 } }, 'the third "Summary"');
+  assert.deepEqual(pick(m.resolveMarks(saved, ['New', ...texts])), [5], 'a heading inserted above');
+  assert.deepEqual(pick(m.resolveMarks(saved, ['Intro', 'x', 'Summary', 'Summary'])), [3], 'an earlier "Summary" removed: nearest');
+  assert.deepEqual(m.occurrences(['a', 'b', 'a', 'a']), [0, 0, 1, 2]);
+});
+
+test('updateMarks re-keys every mark to its current slot and saves its text', () => {
+  const saved = { 0: { status: 'todo' }, 1: { star: true, text: 'B' } };
+  const next = m.updateMarks(saved, ['New', 'A', 'B'], 0, { status: 'doing' });
+  assert.deepEqual(next, { 0: { status: 'doing', text: 'New' }, 2: { star: true, text: 'B' } });
+  // The old slot-only TODO mark on slot 0 moved to 'New' (it has no text to
+  // follow), then was overwritten by the patch.
+});
+
+test('assignMarks with one container for a whole Markdown file', () => {
+  const { flat } = h.buildTree(
+    h.parseMarkdownHeadings('# T\n## A\n## B').map((x, i) => ({ ...x, slot: i })),
+    '',
+    3
+  );
+  const stored = { 2: { status: 'question', text: 'B' } };
+  m.assignMarks(flat, () => stored, [], () => 0);
+  assert.deepEqual(flat.map((n) => n.status), [undefined, undefined, 'question']);
+});
+
+test('applyMarkedFilter by kind: all marked, starred, or one status', () => {
+  const { roots, flat } = h.buildTree(h.parseNotebookHeadings([{ isMarkdown: true, text: '## A\n### A1\n### A2\n## B' }]), '', 1);
+  const by = (t) => flat.find((n) => n.text === t);
+  by('A1').status = 'todo';
+  by('A2').status = 'done';
+  by('B').star = true;
+  assert.equal(m.applyMarkedFilter(roots), 2, 'TODO and starred; Finished is not open');
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A1', 'B']);
+  assert.equal(m.applyMarkedFilter(roots, 'done'), 1);
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A2']);
+  assert.equal(m.applyMarkedFilter(roots, 'star'), 1);
+  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['B']);
+  assert.deepEqual(m.MARK_FILTERS, ['marked', 'star', 'todo', 'doing', 'question', 'done']);
 });
 
 test('assignMarks: explicit status wins over ??? in the text', () => {

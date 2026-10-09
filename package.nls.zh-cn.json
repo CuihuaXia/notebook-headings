@@ -31,7 +31,8 @@
   "command.setStatus": "设置状态…",
   "command.addStar": "加星标",
   "command.removeStar": "取消星标",
-  "command.showMarked": "只看有标记的标题",
+  "command.showMarked": "按标记筛选标题…",
   "command.copyContent": "复制本节内容",
-  "config.inProgressMarkers": "标题文字里含有这些记号的，不用设置状态也显示为\"进行中\"，例如 \"## ??? Analysis\"。清空列表即关闭。"
+  "config.inProgressMarkers": "标题文字里含有这些记号的，不用设置状态也显示为\"进行中\"，例如 \"## ??? Analysis\"。清空列表即关闭。",
+  "command.clearOutputs": "清除本节输出…"
 }

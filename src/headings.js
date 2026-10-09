@@ -54,33 +54,70 @@ const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 /** Closing line of a YAML front matter block. */
 const FRONT_MATTER_END_RE = /^(---|\.\.\.)\s*$/;
 
+/**
+ * A setext underline: `===` (level 1) or `---` (level 2) under a paragraph.
+ * Without a paragraph above it, `---` is a thematic break, not a heading.
+ */
+const SETEXT_RE = /^ {0,3}(=+|-+)[ \t]*$/;
+
+/**
+ * Lines that cannot be (or continue) the paragraph a setext underline turns
+ * into a heading: list items, block quotes, table rows, HTML blocks and
+ * indented code. Keeps `- item` followed by `---` from becoming a heading.
+ */
+const NOT_PARAGRAPH_RE = /^(?: {4,}|\t| {0,3}(?:[-+*][ \t]|\d{1,9}[.)][ \t]|>|\||<))/;
+
+/** Start of an HTML comment block (CommonMark HTML block type 2). */
+const COMMENT_START_RE = /^ {0,3}<!--/;
+
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
+/** The HTML entities that commonly appear in headings. */
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
 /**
  * Strip the most common inline Markdown so tree labels read cleanly:
- * links and images keep their text, bold/italic markers and code backticks
- * are dropped, and inline HTML tags are removed.
+ * links and images keep their text; bold, italic, strikethrough and code
+ * markers are dropped; inline HTML tags and comments are removed; and common
+ * HTML entities (`&amp;`, `&#39;`, …) are decoded. Underscores inside words
+ * (`snake_case`) are left alone, as in CommonMark.
  *
  * @param {string} s raw heading text
  * @returns {string}
  */
 function cleanText(s) {
   return s
+    .replace(/<!--.*?-->/g, '') // <!-- comment -->
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // [text](url) and ![alt](src)
-    .replace(/(\*\*|__)(.+?)\1/g, '$2') // **bold** and __bold__
     .replace(/`([^`]*)`/g, '$1') // `code`
+    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, '$2') // **bold** and __bold__
+    .replace(/\*(?=\S)(.+?)(?<=\S)\*/g, '$1') // *italic*
+    .replace(/(^|[^\w])_(?=\S)(.+?)(?<=\S)_(?![\w])/g, '$1$2') // _italic_, not snake_case
+    .replace(/~~(?=\S)(.+?)(?<=\S)~~/g, '$1') // ~~strikethrough~~
     .replace(/<[^>]+>/g, '') // <span>…</span>
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+      if (e[0] !== '#') return ENTITIES[e.toLowerCase()] || m;
+      const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    })
     .trim();
 }
 
 /**
- * Find every ATX heading in a block of Markdown text.
+ * Find every heading in a block of Markdown text: ATX headings (`## Title`)
+ * and setext headings (a paragraph underlined with `===` or `---`).
  *
- * Lines inside fenced code blocks are skipped, so `# comment` lines in a
- * ```bash or ```r block are not mistaken for headings. A fence only closes
- * on the same character it was opened with (``` vs ~~~).
+ * Skipped, as in CommonMark:
+ * - fenced code blocks, so `# comment` lines in a ```bash or ```r block are
+ *   not mistaken for headings (a fence only closes on the same character it
+ *   was opened with, ``` vs ~~~);
+ * - HTML comment blocks, from a line starting with `<!--` to the line
+ *   containing `-->`, so headings commented out are not listed.
+ *
+ * A setext heading is reported at the first line of its paragraph, with the
+ * paragraph's lines joined by spaces.
  *
  * @param {string} text Markdown source
  * @param {(level: number, text: string, line: number) => void} onHeading
@@ -92,6 +129,8 @@ function cleanText(s) {
 function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
   const lines = text.split(/\r?\n/);
   let fence = null; // the opening fence (e.g. "````") while inside a code block
+  let comment = false; // inside an HTML comment block
+  let para = null; // the open paragraph: { start, lines }, or null
   let start = 0;
 
   if (frontMatter && lines[0] !== undefined && lines[0].trim() === '---') {
@@ -101,9 +140,14 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
 
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
+    if (comment) {
+      if (line.includes('-->')) comment = false;
+      continue;
+    }
     const f = line.match(FENCE_RE);
     if (!fence && f) {
       fence = f[1];
+      para = null;
       continue;
     }
     if (fence) {
@@ -111,8 +155,28 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
       if (closes) fence = null;
       continue;
     }
+    if (COMMENT_START_RE.test(line)) {
+      // A comment that closes on its own line is just skipped.
+      comment = !line.slice(line.indexOf('<!--') + 4).includes('-->');
+      para = null;
+      continue;
+    }
     const m = line.match(HEADING_RE);
-    if (m) onHeading(m[1].length, cleanText(m[2]), i);
+    if (m) {
+      onHeading(m[1].length, cleanText(m[2]), i);
+      para = null;
+      continue;
+    }
+    const s = line.match(SETEXT_RE);
+    if (s && para) {
+      const heading = cleanText(para.lines.join(' '));
+      if (heading) onHeading(s[1][0] === '=' ? 1 : 2, heading, para.start);
+      para = null;
+      continue;
+    }
+    if (!line.trim() || NOT_PARAGRAPH_RE.test(line) || s) para = null;
+    else if (para) para.lines.push(line.trim());
+    else para = { start: i, lines: [line.trim()] };
   }
 }
 
@@ -120,7 +184,8 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
  * Headings of a notebook. Only Markdown cells are scanned; a heading's
  * position is the index of the cell that contains it, and its slot is its
  * index among the headings of that cell (0 for the first), which is how its
- * marks are stored (see src/marks.js).
+ * marks are stored (see src/marks.js). A YAML front matter block at the top
+ * of the first cell (MyST notebooks) is ignored, as in Markdown files.
  *
  * @param {{ isMarkdown: boolean, text: string }[]} cells all cells, in order
  * @returns {{ level: number, text: string, pos: number, slot: number }[]}
@@ -130,7 +195,8 @@ function parseNotebookHeadings(cells) {
   cells.forEach((cell, index) => {
     if (!cell.isMarkdown) return;
     let slot = 0;
-    scanHeadings(cell.text, (level, text) => headings.push({ level, text, pos: index, slot: slot++ }));
+    const onHeading = (level, text) => headings.push({ level, text, pos: index, slot: slot++ });
+    scanHeadings(cell.text, onHeading, { frontMatter: index === 0 });
   });
   return headings;
 }
@@ -247,8 +313,11 @@ function assignOutputSizes(flat, cellBytes) {
 
 /**
  * Human-readable size with decimal units, as macOS Finder shows them:
- * "", "512 B", "2.5 KB", "48 KB", "2.1 MB", "1.3 GB". Zero gives an empty string so
- * sections without outputs show nothing.
+ * "", "512 B", "2.5 KB", "48 KB", "2.1 MB", "120 MB", "1.3 GB". Every unit
+ * follows the same rule: one decimal below 10 ("2.5 KB", "2.1 MB"), whole
+ * numbers from 10 up ("48 KB"), and a trailing ".0" dropped ("2 MB"). A value
+ * that rounds up to 1000 moves to the next unit ("1 MB", not "1000 KB").
+ * Zero gives an empty string so sections without outputs show nothing.
  *
  * @param {number} bytes
  * @returns {string}
@@ -256,11 +325,15 @@ function assignOutputSizes(flat, cellBytes) {
 function formatBytes(bytes) {
   if (!bytes) return '';
   if (bytes < 1000) return `${bytes} B`;
-  // One decimal below 10 KB (2.5 KB), whole numbers above (48 KB); "1.0" → "1".
-  if (bytes < 1e4) return `${(bytes / 1e3).toFixed(1).replace(/\.0$/, '')} KB`;
-  if (bytes < 1e6) return `${Math.round(bytes / 1e3)} KB`;
-  if (bytes < 1e9) return `${(bytes / 1e6).toFixed(1)} MB`;
-  return `${(bytes / 1e9).toFixed(1)} GB`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let u = 0;
+  let v = bytes / 1e3;
+  const round = (x) => (x < 10 ? Number(x.toFixed(1)) : Math.round(x));
+  while (round(v) >= 1000 && u < units.length - 1) {
+    v /= 1e3;
+    u++;
+  }
+  return `${round(v)} ${units[u]}`;
 }
 
 /**

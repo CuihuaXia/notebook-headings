@@ -30,6 +30,62 @@ function notebookCells(file) {
 
 test('cleanText strips inline markdown', () => {
   assert.equal(h.cleanText('**Bold** and `code` [link](http://x) <b>tag</b>'), 'Bold and code link tag');
+  assert.equal(h.cleanText('*Draft* _v2_ ~~old~~ R &amp; D &#39;x&#39; &#x41;'), "Draft v2 old R & D 'x' A");
+  assert.equal(h.cleanText('snake_case_name and 2 * 3 * 4'), 'snake_case_name and 2 * 3 * 4');
+  assert.equal(h.cleanText('Title <!-- note -->'), 'Title');
+  assert.equal(h.cleanText('&unknown; stays'), '&unknown; stays');
+});
+
+test('scanHeadings: HTML comment blocks are skipped', () => {
+  const found = [];
+  const src = ['<!--', '## Hidden draft', '-->', '## Real', '<!-- one line --> ', '## After', '  <!-- open', '# Also hidden', 'still --> text', '## Last'];
+  h.scanHeadings(src.join('\n'), (level, text, line) => found.push([level, text, line]));
+  assert.deepEqual(found, [
+    [2, 'Real', 3],
+    [2, 'After', 5],
+    [2, 'Last', 9],
+  ]);
+});
+
+test('scanHeadings: setext headings', () => {
+  const found = [];
+  const src = [
+    'Title', // 0
+    '=====', // 1 -> level 1 at line 0
+    '',
+    'A long', // 3
+    'subtitle', // 4
+    '---', // 5 -> level 2 "A long subtitle" at line 3
+    '',
+    '---', // 7: thematic break, no paragraph above
+    '- list item', // 8
+    '---', // 9: not a heading under a list item
+    '```',
+    'code',
+    '---', // inside a fence
+    '```',
+    '## ATX', // 14
+  ];
+  h.scanHeadings(src.join('\n'), (level, text, line) => found.push([level, text, line]));
+  assert.deepEqual(found, [
+    [1, 'Title', 0],
+    [2, 'A long subtitle', 3],
+    [2, 'ATX', 14],
+  ]);
+});
+
+test('parseNotebookHeadings skips front matter in the first cell only', () => {
+  const cells = [
+    { isMarkdown: true, text: '---\ntitle: x\n---\n# Title' },
+    { isMarkdown: true, text: 'Para\n---' },
+  ];
+  assert.deepEqual(
+    h.parseNotebookHeadings(cells).map((x) => [x.level, x.text, x.pos]),
+    [
+      [1, 'Title', 0],
+      [2, 'Para', 1],
+    ]
+  );
 });
 
 test('scanHeadings: ATX rules, fences and indentation', () => {
@@ -277,6 +333,9 @@ test('formatBytes uses decimal units and hides zero', () => {
   assert.equal(h.formatBytes(48_400), '48 KB');
   assert.equal(h.formatBytes(2_140_000), '2.1 MB');
   assert.equal(h.formatBytes(1_300_000_000), '1.3 GB');
+  assert.equal(h.formatBytes(999_600), '1 MB', 'rounds up into the next unit');
+  assert.equal(h.formatBytes(2_000_000), '2 MB', 'same rule in every unit');
+  assert.equal(h.formatBytes(120_000_000), '120 MB');
 });
 
 test('mergeRanges merges nested, overlapping and touching ranges', () => {

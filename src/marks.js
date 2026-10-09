@@ -1,19 +1,27 @@
 /**
  * marks.js — the pure logic of heading marks (status and star).
  *
- * No `vscode` dependency, so it is unit-tested with plain Node. Marks are
- * stored in the Jupyter metadata of the cell that holds the heading, under
- * MARKS_KEY, keyed by the heading's index within that cell ("0" for the
- * first heading of the cell, "1" for the second, …):
+ * No `vscode` dependency, so it is unit-tested with plain Node.
  *
- *     "metadata": { "notebook_headings": { "0": { "status": "todo", "star": true } } }
+ * Marks of notebooks and Markdown files alike are kept in the project's
+ * `.vscode/notebook-headings.json` (see MarksFile in src/extension.js), so the
+ * documents themselves are never changed. Each file's entry maps a heading's
+ * index in the file to its mark, saved with the heading's text:
  *
- * Keying by index rather than by text keeps a mark when the heading is
- * renamed. Jupyter, Jupyter Book and nbconvert ignore this key.
+ *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "star": true, "text": "Setup" } } } }
+ *
+ * The text keeps a mark on its heading when headings are added or removed
+ * above it; the index keeps it when the heading is renamed (see
+ * resolveMarks()).
+ *
+ * Version 1.5 kept notebook marks in the Jupyter metadata of the heading's
+ * cell instead, under MARKS_KEY, keyed by the heading's index within the cell.
+ * Those are still read (see combineMarks()) and move to the file the first
+ * time a mark in that cell changes.
  */
 'use strict';
 
-/** Metadata key holding the marks of a cell's headings. */
+/** Cell metadata key of the marks saved by version 1.5. */
 const MARKS_KEY = 'notebook_headings';
 
 /**
@@ -42,14 +50,13 @@ const STAR_FILL = '#E8A317';
 const statusById = (id) => STATUSES.find((s) => s.id === id);
 
 /**
- * The marks stored in a cell's Jupyter metadata, cleaned up: unknown
- * statuses and malformed entries are dropped.
+ * A marks object (heading slot -> mark) cleaned up: unknown statuses and
+ * malformed entries are dropped. `text` is kept when present.
  *
- * @param {object} jupyterMeta the cell's Jupyter metadata (may be undefined)
- * @returns {Object<string, { status?: string, star?: boolean }>} by heading index
+ * @param {*} raw
+ * @returns {Object<string, { status?: string, star?: boolean, text?: string }>}
  */
-function readMarks(jupyterMeta) {
-  const raw = jupyterMeta && jupyterMeta[MARKS_KEY];
+function cleanMarks(raw) {
   const out = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   for (const [slot, m] of Object.entries(raw)) {
@@ -57,25 +64,104 @@ function readMarks(jupyterMeta) {
     const mark = {};
     if (statusById(m.status)) mark.status = m.status;
     if (m.star === true) mark.star = true;
-    if (Object.keys(mark).length) out[slot] = mark;
+    if (!Object.keys(mark).length) continue;
+    if (typeof m.text === 'string') mark.text = m.text;
+    if (Number.isInteger(m.n) && m.n > 0) mark.n = m.n;
+    out[slot] = mark;
   }
   return out;
 }
 
 /**
- * A copy of a cell's Jupyter metadata with one heading's mark changed.
- * `patch.status` set to null clears the status, `patch.star` false removes
- * the star; empty entries and an empty marks object are removed entirely.
+ * The marks stored in a cell's Jupyter metadata, cleaned up.
  *
- * @param {object} jupyterMeta
- * @param {number} slot the heading's index within the cell
- * @param {{ status?: string|null, star?: boolean }} patch
- * @returns {object}
+ * @param {object} jupyterMeta the cell's Jupyter metadata (may be undefined)
+ * @returns {Object<string, { status?: string, star?: boolean, text?: string }>} by heading slot
  */
-function withMark(jupyterMeta, slot, patch) {
-  const meta = JSON.parse(JSON.stringify(jupyterMeta || {}));
-  const marks = readMarks(meta);
-  const mark = { ...(marks[slot] || {}) };
+function readMarks(jupyterMeta) {
+  return cleanMarks(jupyterMeta && jupyterMeta[MARKS_KEY]);
+}
+
+/**
+ * Which occurrence of its text each heading is: 0 for the first heading with
+ * that text, 1 for the second, and so on.
+ *
+ * @param {string[]} texts
+ * @returns {number[]}
+ */
+function occurrences(texts) {
+  const seen = new Map();
+  return texts.map((t) => {
+    const n = seen.get(t) || 0;
+    seen.set(t, n + 1);
+    return n;
+  });
+}
+
+/**
+ * Match stored marks to the headings a container (a notebook or a Markdown
+ * file) holds now. A mark is saved with its heading's text and, when several
+ * headings share that text, which of them it is (`n`: 0 = the first). It goes
+ * to the heading with that text and occurrence, so adding, removing or moving
+ * other headings does not move it to a neighbor — not even to another
+ * "Summary". If the text is still there but that occurrence is not, it goes
+ * to the same-text heading nearest its saved index. A mark whose text is gone
+ * (the heading was renamed) or that has no text (saved by version 1.5) falls
+ * back to its saved index, if that heading is not already claimed. Marks
+ * matching nothing are dropped.
+ *
+ * @param {Object<string, object>} marks as returned by cleanMarks()/readMarks()
+ * @param {string[]} texts the container's heading texts, by index
+ * @returns {({ status?: string, star?: boolean } | undefined)[]} by index
+ */
+function resolveMarks(marks, texts) {
+  const out = new Array(texts.length).fill(undefined);
+  const occ = occurrences(texts);
+  const strip = ({ status, star }) => ({ ...(status ? { status } : {}), ...(star ? { star } : {}) });
+  const pending = [];
+  for (const [key, mark] of Object.entries(marks || {})) {
+    const slot = Number(key);
+    if (mark.text === undefined) {
+      pending.push([slot, mark]);
+      continue;
+    }
+    const n = mark.n || 0;
+    let at = texts.findIndex((t, i) => t === mark.text && occ[i] === n && !out[i]);
+    if (at < 0) {
+      // That occurrence is gone: the nearest unclaimed heading with the text.
+      let best = Infinity;
+      texts.forEach((t, i) => {
+        if (t === mark.text && !out[i] && Math.abs(i - slot) < best) {
+          best = Math.abs(i - slot);
+          at = i;
+        }
+      });
+    }
+    if (at >= 0) out[at] = strip(mark);
+    else pending.push([slot, mark]);
+  }
+  for (const [slot, mark] of pending) {
+    if (slot < texts.length && !out[slot]) out[slot] = strip(mark);
+  }
+  return out;
+}
+
+/**
+ * New marks for a container after changing one heading's mark: every mark
+ * is resolved against the current headings and saved again under its current
+ * slot together with its heading's text (which also upgrades marks saved by
+ * older versions). `patch.status` null clears the status, `patch.star` false
+ * removes the star; empty marks are left out.
+ *
+ * @param {Object<string, object>} marks current marks (see cleanMarks())
+ * @param {string[]} texts the container's heading texts, by slot
+ * @param {number} slot the heading to change
+ * @param {{ status?: string|null, star?: boolean }} patch
+ * @returns {Object<string, { status?: string, star?: boolean, text: string }>}
+ */
+function updateMarks(marks, texts, slot, patch) {
+  const resolved = resolveMarks(marks, texts);
+  const mark = { ...(resolved[slot] || {}) };
   if ('status' in patch) {
     if (patch.status && statusById(patch.status)) mark.status = patch.status;
     else delete mark.status;
@@ -84,11 +170,52 @@ function withMark(jupyterMeta, slot, patch) {
     if (patch.star) mark.star = true;
     else delete mark.star;
   }
-  if (Object.keys(mark).length) marks[slot] = mark;
-  else delete marks[slot];
-  if (Object.keys(marks).length) meta[MARKS_KEY] = marks;
-  else delete meta[MARKS_KEY];
-  return meta;
+  resolved[slot] = Object.keys(mark).length ? mark : undefined;
+  const occ = occurrences(texts);
+  const out = {};
+  resolved.forEach((m, i) => {
+    if (m) out[i] = { ...m, text: texts[i], ...(occ[i] ? { n: occ[i] } : {}) };
+  });
+  return out;
+}
+
+/**
+ * The marks of a notebook's headings: those saved in the marks file, and for
+ * headings without one, those still in their cell's metadata (version 1.5).
+ *
+ * @param {{ text: string, pos: number, cellSlot: number }[]} headings all
+ *        headings in document order; `pos` is the cell index and `cellSlot`
+ *        the heading's index within its cell
+ * @param {Object<string, object>} fileMarks the notebook's entry in the marks
+ *        file (see cleanMarks()), keyed by heading index
+ * @param {(pos: number) => Object<string, object>} cellMarksAt marks in a
+ *        cell's metadata (see readMarks())
+ * @returns {{ marks: Object<string, object>, legacy: Set<number> }} `marks`
+ *        keyed by heading index, with texts, ready for updateMarks(); `legacy`
+ *        the indexes of headings whose mark came from cell metadata
+ */
+function combineMarks(headings, fileMarks, cellMarksAt) {
+  const texts = headings.map((h) => h.text);
+  const fromFile = resolveMarks(fileMarks, texts);
+  const occ = occurrences(texts);
+  const byCell = new Map();
+  headings.forEach((h, i) => {
+    if (!byCell.has(h.pos)) byCell.set(h.pos, []);
+    byCell.get(h.pos)[h.cellSlot] = i;
+  });
+  const marks = {};
+  const legacy = new Set();
+  for (const [pos, indexes] of byCell) {
+    const stored = cellMarksAt(pos);
+    const fromCell = stored && Object.keys(stored).length ? resolveMarks(stored, indexes.map((i) => headings[i].text)) : [];
+    indexes.forEach((i, slot) => {
+      const mark = fromFile[i] || fromCell[slot];
+      if (!mark) return;
+      if (!fromFile[i]) legacy.add(i);
+      marks[i] = { ...mark, text: headings[i].text, ...(occ[i] ? { n: occ[i] } : {}) };
+    });
+  }
+  return { marks, legacy };
 }
 
 /**
@@ -104,17 +231,40 @@ function hasMarker(text, markers) {
 }
 
 /**
+ * The heading texts of every container, by slot: `containerOf(node)` names
+ * the container (a cell index in notebooks; one shared key for a Markdown
+ * file, where `slot` is the heading's index in the file).
+ *
+ * @param {object[]} flat nodes in document order (with `slot`)
+ * @param {(node: object) => *} containerOf
+ * @returns {Map<*, string[]>}
+ */
+function textsByContainer(flat, containerOf) {
+  const map = new Map();
+  for (const node of flat) {
+    const key = containerOf(node);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)[node.slot] = node.text;
+  }
+  return map;
+}
+
+/**
  * Set `status`, `autoStatus` and `star` on every node. An explicit status
  * wins over a marker in the text.
  *
  * @param {object[]} flat nodes in document order (with `pos` and `slot`)
- * @param {(pos: number) => object} marksAt marks of the cell at `pos`, as
- *        returned by readMarks() (an empty object for Markdown files)
+ * @param {(key: *) => object} marksOf stored marks of a container, as
+ *        returned by cleanMarks()
  * @param {string[]} markers in-progress markers
+ * @param {(node: object) => *} [containerOf] a node's container; defaults to
+ *        its cell (`pos`)
  */
-function assignMarks(flat, marksAt, markers) {
+function assignMarks(flat, marksOf, markers, containerOf = (n) => n.pos) {
+  const resolved = new Map();
+  for (const [key, texts] of textsByContainer(flat, containerOf)) resolved.set(key, resolveMarks(marksOf(key) || {}, texts));
   for (const node of flat) {
-    const mark = (marksAt(node.pos) || {})[node.slot] || {};
+    const mark = resolved.get(containerOf(node))[node.slot] || {};
     node.star = !!mark.star;
     node.autoStatus = !mark.status && hasMarker(node.text, markers);
     node.status = mark.status || (node.autoStatus ? 'doing' : undefined);
@@ -192,19 +342,34 @@ function countsText(counts) {
 }
 
 /**
- * Like applyFilter() in headings.js, but keeps marked headings (starred or
- * with an open status) and their ancestors.
+ * What "Show Marked Headings" can show: every marked heading (starred or
+ * with an open status), only starred ones, or one status.
+ */
+const MARK_FILTERS = ['marked', 'star', ...STATUSES.map((s) => s.id)];
+
+/** Whether a node passes a mark filter (see MARK_FILTERS). */
+function matchesMarkFilter(node, kind = 'marked') {
+  if (kind === 'marked') return isMarked(node);
+  if (kind === 'star') return !!node.star;
+  return node.status === kind;
+}
+
+/**
+ * Like applyFilter() in headings.js, but keeps the headings that pass a mark
+ * filter (see MARK_FILTERS) and their ancestors.
  *
  * @param {object[]} roots
- * @returns {number} the number of marked headings
+ * @param {string} [kind] 'marked' (default), 'star' or a status id
+ * @returns {number} the number of headings that pass
  */
-function applyMarkedFilter(roots) {
+function applyMarkedFilter(roots, kind = 'marked') {
   let count = 0;
   const walk = (node) => {
     node.matchAt = -1;
     const childVisible = node.children.map(walk).some(Boolean);
-    if (isMarked(node)) count++;
-    node.visible = isMarked(node) || childVisible;
+    const hit = matchesMarkFilter(node, kind);
+    if (hit) count++;
+    node.visible = hit || childVisible;
     return node.visible;
   };
   roots.forEach(walk);
@@ -214,12 +379,19 @@ function applyMarkedFilter(roots) {
 module.exports = {
   STATUSES,
   STAR_FILL,
+  MARK_FILTERS,
   statusById,
+  cleanMarks,
   readMarks,
-  withMark,
+  resolveMarks,
+  updateMarks,
+  combineMarks,
+  occurrences,
+  MARKS_KEY,
   assignMarks,
   summarizeMarks,
   iconFile,
   countsText,
+  matchesMarkFilter,
   applyMarkedFilter,
 };

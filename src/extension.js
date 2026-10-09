@@ -19,6 +19,10 @@
  */
 'use strict';
 
+const { execFile } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const vscode = require('vscode');
 const {
   parseNotebookHeadings,
@@ -39,8 +43,15 @@ const { COMMON_TAGS, isValidTag, multiPickerEntries, nextTagsMulti, sortKeysDeep
 const {
   STATUSES,
   statusById,
+  MARK_FILTERS,
+  cleanMarks,
+  matchesMarkFilter,
   readMarks,
-  withMark,
+  resolveMarks,
+  updateMarks,
+  combineMarks,
+  occurrences,
+  MARKS_KEY,
   assignMarks,
   summarizeMarks,
   iconFile,
@@ -178,11 +189,55 @@ function cellOutputBytes(cell) {
   return bytes;
 }
 
+/** Whether a notebook cell is a Markdown cell. */
+const isMarkdownCell = (cell) => cell.kind === vscode.NotebookCellKind.Markup;
+
+/** Whether a notebook cell is a code cell (not Markdown). */
+const isCodeCell = (cell) => cell.kind === vscode.NotebookCellKind.Code;
+
 /**
- * Headings and size (cell or line count) of a source's document, plus the
- * output size of every cell for notebooks.
+ * The cells of a notebook covered by `[start, end)` ranges, in order. The
+ * ranges must not overlap (see mergeRanges()); ends past the last cell are
+ * clipped.
+ *
+ * @param {vscode.NotebookDocument} nb
+ * @param {{ start: number, end: number }[]} ranges
+ * @returns {vscode.NotebookCell[]}
  */
-function readSource(source) {
+function cellsIn(nb, ranges) {
+  const cells = [];
+  for (const r of ranges) {
+    for (let i = r.start; i < Math.min(r.end, nb.cellCount); i++) cells.push(nb.cellAt(i));
+  }
+  return cells;
+}
+
+/**
+ * Whole lines `[start, end)` of a text document as a Range: up to the start
+ * of line `end`, or to the very end of the file when the range reaches it.
+ *
+ * @param {vscode.TextDocument} doc
+ * @param {{ start: number, end: number }} r
+ * @returns {{ range: vscode.Range, lines: number }}
+ */
+function lineRange(doc, r) {
+  const last = Math.min(r.end, doc.lineCount);
+  const to = last < doc.lineCount ? new vscode.Position(last, 0) : doc.lineAt(last - 1).range.end;
+  return { range: new vscode.Range(new vscode.Position(r.start, 0), to), lines: last - r.start };
+}
+
+/**
+ * Headings and size (cell or line count) of a source's document, the output
+ * size of every cell for notebooks, and the marks of its headings: `marks`
+ * maps a heading's index in the document to its mark (with its text), and
+ * `legacy` lists the headings whose mark is still in their cell's metadata
+ * (saved by version 1.5; see combineMarks() in src/marks.js). A heading's
+ * `slot` is its index in the document.
+ *
+ * @param {object} source
+ * @param {MarksFile} marksFile where marks are kept
+ */
+function readSource(source, marksFile) {
   if (source.kind === 'notebook') {
     const nb = source.doc;
     const custom = useCustomMetadata();
@@ -191,15 +246,374 @@ function readSource(source) {
     const cellMarks = [];
     for (let i = 0; i < nb.cellCount; i++) {
       const cell = nb.cellAt(i);
-      const isMarkdown = cell.kind === vscode.NotebookCellKind.Markup;
+      const isMarkdown = isMarkdownCell(cell);
       // Only Markdown cells are parsed, so code cell text is never read.
       cells.push({ isMarkdown, text: isMarkdown ? cell.document.getText() : '' });
       cellBytes.push(cellOutputBytes(cell));
       cellMarks.push(isMarkdown ? readMarks(jupyterMetaOf(cell, custom)) : {});
     }
-    return { headings: parseNotebookHeadings(cells), total: nb.cellCount, cellBytes, marksAt: (pos) => cellMarks[pos] };
+    const headings = parseNotebookHeadings(cells).map((h, i) => ({ ...h, cellSlot: h.slot, slot: i }));
+    const { marks, legacy } = combineMarks(headings, marksFile.get(nb.uri), (pos) => cellMarks[pos]);
+    return { headings, total: nb.cellCount, cellBytes, marks, legacy };
   }
-  return { headings: parseMarkdownHeadings(source.doc.getText()), total: source.doc.lineCount, marksAt: () => ({}) };
+  const headings = parseMarkdownHeadings(source.doc.getText()).map((h, i) => ({ ...h, slot: i }));
+  const texts = headings.map((h) => h.text);
+  const occ = occurrences(texts);
+  const marks = {};
+  resolveMarks(marksFile.get(source.doc.uri), texts).forEach((m, i) => {
+    if (m) marks[i] = { ...m, text: texts[i], ...(occ[i] ? { n: occ[i] } : {}) };
+  });
+  return { headings, total: source.doc.lineCount, marks, legacy: new Set() };
+}
+
+/** File holding the marks, relative to its root folder. */
+const MARKS_FILE = path.join('.vscode', 'notebook-headings.json');
+
+/**
+ * Where marks are kept: `.vscode/notebook-headings.json` in the project, for
+ * notebooks and Markdown files alike, so they travel with the project (git,
+ * Dropbox, another computer) and the documents themselves are never changed:
+ *
+ *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "text": "Setup" } } } }
+ *
+ * The root is the workspace folder that holds the document, or the
+ * document's own folder when it is outside every workspace folder; keys are
+ * paths relative to the root, with `/`. Each entry maps a heading's index in
+ * the document to its mark (see src/marks.js). The file is read on every
+ * redraw (it is small), so a `git pull` shows up right away; it is deleted
+ * when no mark is left. Documents that are not on disk (untitled or remote
+ * virtual files) fall back to VS Code's workspace storage.
+ */
+class MarksFile {
+  /** @param {vscode.Memento} state the extension's workspaceState (fallback) */
+  constructor(state) {
+    this.state = state;
+    /** called with the marks file's path after a mark is saved in it */
+    this.onWrite = undefined;
+    /** invalid marks files already reported */
+    this.reported = new Set();
+  }
+
+  /**
+   * Marks file and key of a document, or undefined when it is not on disk.
+   * The root is the workspace folder holding the document (or the document's
+   * own folder outside every workspace folder) — or, when the document is in
+   * a git repository inside that folder, the repository: a workspace folder
+   * holding several repositories keeps each one's marks in that repository,
+   * so they travel with it.
+   */
+  location(uri) {
+    if (uri.scheme !== 'file') return undefined;
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    const base = folder && folder.uri.scheme === 'file' ? folder.uri.fsPath : path.dirname(uri.fsPath);
+    let root = base;
+    for (let d = path.dirname(uri.fsPath); d.length > base.length && d.startsWith(base); d = path.dirname(d)) {
+      if (fs.existsSync(path.join(d, '.git'))) {
+        root = d;
+        break;
+      }
+    }
+    return { file: path.join(root, MARKS_FILE), key: path.relative(root, uri.fsPath).split(path.sep).join('/') };
+  }
+
+  /**
+   * The contents of a marks file: an empty object when it does not exist.
+   * A file that exists but is not valid JSON (for example with git conflict
+   * markers after a merge) throws, so it is never overwritten and its marks
+   * lost; the error is reported once per session.
+   */
+  read(file) {
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      return {};
+    }
+    try {
+      const data = JSON.parse(text);
+      if (data && typeof data === 'object' && !Array.isArray(data)) return data;
+    } catch {
+      // reported below
+    }
+    const err = new Error(t('{0} is not valid JSON (a git merge conflict?). Fix it, then try again.', file));
+    if (!this.reported.has(file)) {
+      this.reported.add(file);
+      vscode.window.showErrorMessage(`Notebook Headings: ${err.message}`, t('Open')).then((pick) => {
+        if (pick) vscode.window.showTextDocument(vscode.Uri.file(file));
+      });
+    }
+    throw err;
+  }
+
+  /** read(), but an unreadable file gives no marks instead of an error (for display). */
+  readForDisplay(file) {
+    try {
+      return this.read(file);
+    } catch {
+      return {};
+    }
+  }
+
+  /** Write a marks file, or delete it when nothing is left in it. */
+  async write(file, data) {
+    if (data.marks && !Object.keys(data.marks).length) delete data.marks;
+    if (!Object.keys(data).length) {
+      await fs.promises.rm(file, { force: true });
+      return;
+    }
+    await fs.promises.mkdir(path.dirname(file), { recursive: true });
+    await fs.promises.writeFile(file, JSON.stringify(sortKeysDeep(data), null, 2) + '\n');
+  }
+
+  /** Key of a document's marks in the workspace storage (this computer only). */
+  localKey(uri) {
+    return `marks|${uri.toString()}`;
+  }
+
+  /** Documents at or under `uri` with marks in the workspace storage: [uri, marks] pairs. */
+  localUnder(uri) {
+    const prefix = this.localKey(uri);
+    return this.state
+      .keys()
+      .filter((k) => k === prefix || k.startsWith(prefix + '/'))
+      .map((k) => [vscode.Uri.parse(k.slice('marks|'.length)), this.state.get(k)]);
+  }
+
+  /** The stored marks of a document, cleaned up. */
+  get(uri) {
+    const loc = this.location(uri);
+    const all = loc && this.readForDisplay(loc.file).marks;
+    const shared = all && all[loc.key];
+    return cleanMarks(shared || this.state.get(this.localKey(uri)));
+  }
+
+  /**
+   * Whether a document's marks must stay on this computer: documents not on
+   * disk, documents that git ignores (kept out of the repository on purpose,
+   * so their path and heading texts must not reach it through the marks
+   * file), and documents in a git repository that git may not be run for
+   * (outside a trusted workspace folder; see gitAllowed()), where whether
+   * they are ignored cannot be checked.
+   */
+  async isLocal(uri) {
+    if (!this.location(uri)) return true;
+    const dir = path.dirname(uri.fsPath);
+    if (!gitAllowed(dir)) return insideGitRepo(dir);
+    return gitIgnores(uri.fsPath, dir);
+  }
+
+  /**
+   * Replace the marks of a document; an empty object removes them. They go to
+   * the project's marks file, or to the workspace storage on this computer for
+   * documents that must stay local (see isLocal()).
+   */
+  async set(uri, marks) {
+    const empty = !Object.keys(marks).length;
+    const loc = this.location(uri);
+    const local = !empty && (await this.isLocal(uri));
+    await this.state.update(this.localKey(uri), local ? marks : undefined);
+    if (!loc) return;
+    // Removing an entry tolerates a broken file (there is nothing to remove
+    // from it); adding one does not, so it is never overwritten.
+    const data = local || empty ? this.readForDisplay(loc.file) : this.read(loc.file);
+    const all = data.marks && typeof data.marks === 'object' ? data.marks : {};
+    if (local || empty) {
+      if (!(loc.key in all)) return; // nothing to remove; leave the file alone
+      delete all[loc.key];
+    } else {
+      all[loc.key] = marks;
+    }
+    data.marks = all;
+    await this.write(loc.file, data);
+    if (!local && !empty && this.onWrite) this.onWrite(loc.file);
+  }
+
+  /**
+   * Forget the marks of deleted documents (or of every document in a deleted
+   * folder). Only deletions made in VS Code are seen.
+   *
+   * @param {vscode.Uri[]} uris
+   */
+  async forget(uris) {
+    for (const uri of uris) {
+      for (const [local] of this.localUnder(uri)) await this.state.update(this.localKey(local), undefined);
+      const loc = this.location(uri);
+      if (!loc) continue;
+      const all = this.readForDisplay(loc.file).marks || {};
+      const gone = Object.keys(all).filter((k) => k === loc.key || k.startsWith(loc.key + '/'));
+      for (const key of gone) await this.set(vscode.Uri.file(path.join(path.dirname(loc.file), '..', ...key.split('/'))), {});
+    }
+  }
+
+  /**
+   * Move marks along when documents or folders are renamed or moved in VS Code.
+   * Entries are re-keyed within one marks file, or moved to another one when
+   * the new place has a different root.
+   *
+   * @param {{ oldUri: vscode.Uri, newUri: vscode.Uri }[]} renames
+   */
+  async rename(renames) {
+    for (const { oldUri, newUri } of renames) {
+      // Marks kept on this computer (see set()).
+      for (const [uri, marks] of this.localUnder(oldUri)) {
+        const moved = vscode.Uri.file(path.join(newUri.fsPath, path.relative(oldUri.fsPath, uri.fsPath)));
+        await this.state.update(this.localKey(moved), marks);
+        await this.state.update(this.localKey(uri), undefined);
+      }
+      const from = this.location(oldUri);
+      if (!from) continue;
+      const all = this.readForDisplay(from.file).marks || {};
+      // A renamed file is its own key; a renamed folder is a prefix of keys.
+      const moved = Object.keys(all).filter((k) => k === from.key || k.startsWith(from.key + '/'));
+      for (const key of moved) {
+        const oldFile = vscode.Uri.file(path.join(path.dirname(from.file), '..', ...key.split('/')));
+        const newFile = vscode.Uri.file(path.join(newUri.fsPath, path.relative(oldUri.fsPath, oldFile.fsPath)));
+        const marks = cleanMarks(all[key]);
+        // Save under the new name first, so a failure cannot lose them.
+        await this.set(newFile, marks);
+        await this.set(oldFile, {});
+      }
+    }
+  }
+}
+
+/**
+ * Run git in a folder. Resolves with the exit code (0 = success) and output;
+ * a missing git, a timeout or a folder outside any repository give a
+ * non-zero code, never an error.
+ *
+ * Only for folders of a trusted workspace (see gitAllowed()), and with
+ * `core.fsmonitor` off: a repository's own config could otherwise make git
+ * start a program of its choosing.
+ */
+function git(args, cwd) {
+  return new Promise((resolve) => {
+    if (!gitAllowed(cwd)) return resolve({ code: -1, stdout: '' });
+    execFile('git', ['-c', 'core.fsmonitor=false', ...args], { cwd, timeout: 5000 }, (err, stdout) => {
+      resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, stdout: stdout || '' });
+    });
+  });
+}
+
+/** Whether a folder is inside a git repository (looks for `.git`; does not run git). */
+function insideGitRepo(dir) {
+  for (let d = dir; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.git'))) return true;
+    if (path.dirname(d) === d) return false;
+  }
+}
+
+/** Whether git may run in a folder: a trusted workspace, inside one of its folders. */
+function gitAllowed(dir) {
+  if (!vscode.workspace.isTrusted) return false;
+  return !!vscode.workspace.getWorkspaceFolder(vscode.Uri.file(dir));
+}
+
+/** Marks files already checked in this session. */
+const gitChecked = new Set();
+
+/** Whether git ignores a path (false outside a repository or without git). */
+const gitIgnores = async (target, cwd) => (await git(['check-ignore', '-q', target], cwd)).code === 0;
+
+/**
+ * Change the project's .gitignore so git keeps the marks file, without
+ * changing what else it ignores. Lines are appended to the .gitignore next to
+ * `.vscode/` (it takes precedence over global and .git/info/exclude rules):
+ * - when a rule ignores the whole `.vscode` folder, git cannot re-include a
+ *   file inside it, so the folder is re-included, its contents ignored
+ *   again, and only the marks file let through;
+ * - otherwise one line re-includes the marks file.
+ * The result is checked with git; if the file is still ignored (e.g. the
+ * project folder itself is ignored), the .gitignore is put back as it was.
+ *
+ * @param {string} file path of the marks file
+ * @returns {Promise<string|undefined>} the .gitignore changed, or undefined
+ */
+async function fixGitIgnore(file) {
+  const root = path.dirname(path.dirname(file));
+  const gitignore = path.join(root, '.gitignore');
+  const folderIgnored = await gitIgnores('.vscode/', root);
+  const lines = folderIgnored
+    ? ['!/.vscode/', '/.vscode/*', '!/.vscode/notebook-headings.json']
+    : ['!/.vscode/notebook-headings.json'];
+  let before;
+  try {
+    before = fs.readFileSync(gitignore, 'utf8');
+  } catch {
+    before = undefined;
+  }
+  // Keep the file's line endings.
+  const eol = before && before.includes('\r\n') ? '\r\n' : '\n';
+  const block = ['# Notebook Headings: keep heading marks with the project', ...lines].join(eol) + eol;
+  const after = before ? `${before.replace(/(\r?\n)*$/, eol)}${eol}${block}` : block;
+  await fs.promises.writeFile(gitignore, after);
+  if (!(await gitIgnores(file, root))) return gitignore;
+  if (before === undefined) await fs.promises.rm(gitignore, { force: true });
+  else await fs.promises.writeFile(gitignore, before);
+  return undefined;
+}
+
+/**
+ * Marks should travel with the project, so warn once when git ignores the
+ * marks file (e.g. a `.vscode/` line in .gitignore): it would then never reach
+ * the user's other computers. Offers to fix .gitignore in one click (see
+ * fixGitIgnore()), to open the rule that ignores the file, or to stop asking
+ * for this project.
+ *
+ * @param {string} file path of the marks file
+ * @param {vscode.Memento} state the extension's workspaceState
+ */
+async function warnIfGitIgnored(file, state) {
+  const quietKey = `gitignoreQuiet|${file}`;
+  if (gitChecked.has(file) || state.get(quietKey)) return;
+  gitChecked.add(file);
+  const cwd = path.dirname(file);
+  if (!(await gitIgnores(file, cwd))) return;
+  // "<source>:<line>:<pattern>\t<path>": where the ignoring rule is. The
+  // source is relative to the repository root (or absolute, or starts with ~
+  // for a global excludes file).
+  const m = (await git(['check-ignore', '-v', file], cwd)).stdout.match(/^(.*):(\d+):(.*)\t/);
+  const top = (await git(['rev-parse', '--show-toplevel'], cwd)).stdout.trim() || cwd;
+  const source = m && (m[1].startsWith('~/') ? path.join(os.homedir(), m[1].slice(2)) : path.resolve(top, m[1]));
+  const rule = m ? { source, line: Number(m[2]), pattern: m[3] } : undefined;
+  const fix = t('Fix .gitignore');
+  const open = rule ? t('Open {0}', path.basename(rule.source)) : undefined;
+  const quiet = t("Don't Show Again");
+  const answer = await vscode.window.showWarningMessage(
+    t(
+      'Notebook Headings: git ignores {0}{1}, so your marks will not reach your other computers. "Fix .gitignore" adds the lines that let git keep this one file; nothing else changes.',
+      MARKS_FILE.split(path.sep).join('/'),
+      rule ? t(' (rule "{0}" in {1}, line {2})', rule.pattern, path.basename(rule.source), rule.line) : ''
+    ),
+    ...[fix, open, quiet].filter(Boolean)
+  );
+  if (answer === quiet) await state.update(quietKey, true);
+  if (answer === open && rule) {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(rule.source));
+    const at = new vscode.Position(Math.max(rule.line - 1, 0), 0);
+    await vscode.window.showTextDocument(doc, { selection: new vscode.Selection(at, at) });
+  }
+  if (answer === fix) {
+    let changed;
+    try {
+      changed = await fixGitIgnore(file);
+    } catch (err) {
+      vscode.window.showErrorMessage(t('Notebook Headings: could not change .gitignore ({0}).', err.message));
+      return;
+    }
+    if (!changed) {
+      vscode.window.showWarningMessage(
+        t('Notebook Headings: .gitignore was left unchanged: git would still ignore the marks file (is the project folder itself ignored?).')
+      );
+      return;
+    }
+    const show = t('Show');
+    const done = await vscode.window.showInformationMessage(
+      t('Notebook Headings: updated .gitignore; commit .vscode/notebook-headings.json to take your marks along.'),
+      show
+    );
+    if (done === show) await vscode.window.showTextDocument(vscode.Uri.file(changed));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -274,20 +688,11 @@ async function setJupyterMetadata(changes) {
 /** Replace the tags of one or more cells as one undoable edit. */
 const setCellTags = (changes) => setJupyterMetadata(changes.map(({ cell, tags }) => [cell, metadataWithTags(cell, tags)]));
 
-/** Whether a notebook cell is a code cell (not Markdown). */
-const isCodeCell = (cell) => cell.kind === vscode.NotebookCellKind.Code;
-
 /** Cells covered by a notebook editor's selections, in order, without repeats. */
 function selectedCells(editor) {
   if (!editor) return [];
-  const seen = new Set();
-  const cells = [];
-  for (const r of editor.selections || (editor.selection ? [editor.selection] : [])) {
-    for (let i = r.start; i < Math.min(r.end, editor.notebook.cellCount); i++) {
-      if (!seen.has(i)) seen.add(i), cells.push(editor.notebook.cellAt(i));
-    }
-  }
-  return cells.sort((a, b) => a.index - b.index);
+  const selections = editor.selections || (editor.selection ? [editor.selection] : []);
+  return cellsIn(editor.notebook, mergeRanges(selections.map((r) => ({ start: r.start, end: r.end }))));
 }
 
 /** The "Tags" button at the bottom right of code cells (and of tagged Markdown cells). */
@@ -306,7 +711,7 @@ class CellTagButton {
     const tags = getCellTags(cell);
     // The offered tags collapse code and outputs, so the button belongs on code
     // cells; a Markdown cell shows it only when it already has tags to edit.
-    if (cell.kind !== vscode.NotebookCellKind.Code && !tags.length) return [];
+    if (!isCodeCell(cell) && !tags.length) return [];
     return [
       {
         text: tags.length ? `$(tag) ${tags.length}` : `$(tag) ${t('Tags')}`,
@@ -351,7 +756,13 @@ class LevelDecorations {
  * expanded or collapsed, and the active filter.
  */
 class HeadingsProvider {
-  constructor() {
+  /** @param {MarksFile} marksFile where marks are kept */
+  constructor(marksFile) {
+    this.marksFile = marksFile;
+    /** marks of the current document by heading index, with texts (see readSource()) */
+    this.marks = {};
+    /** heading indexes whose mark is still in cell metadata (version 1.5) */
+    this.legacy = new Set();
     this._onDidChange = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChange.event;
     this.source = undefined;
@@ -360,8 +771,12 @@ class HeadingsProvider {
     /** tree item id -> heading node, rebuilt with the tree */
     this.byId = new Map();
     this.filter = '';
-    /** "Show Marked Headings": only starred headings and open statuses */
-    this.markedOnly = false;
+    /**
+     * "Show Marked Headings": undefined (off), 'marked' (starred headings and
+     * open statuses), 'star' or a status id; see MARK_FILTERS in src/marks.js
+     */
+    this.markFilter = undefined;
+    /** headings passing markFilter */
     this.markedCount = 0;
     /** the "Starred" group shown above the headings, or undefined */
     this.starGroup = undefined;
@@ -375,12 +790,12 @@ class HeadingsProvider {
 
   /** Whether the tree shows a filtered subset (text filter or marked only). */
   get filtering() {
-    return !!this.filter || this.markedOnly;
+    return !!this.filter || !!this.markFilter;
   }
 
   setSource(source) {
     this.source = source;
-    // Lets package.json show notebook-only menu items (tags, marks).
+    // Lets package.json show notebook-only menu items (tags, outputs).
     vscode.commands.executeCommand('setContext', 'notebookHeadings.isNotebook', !!source && source.kind === 'notebook');
     this.rebuild();
   }
@@ -400,21 +815,21 @@ class HeadingsProvider {
   /** Text filter; replaces "Show Marked Headings". */
   setFilter(query) {
     this.filter = query.trim();
-    this.markedOnly = false;
+    this.markFilter = undefined;
     this.applyFilters();
     this._onDidChange.fire();
   }
 
-  /** "Show Marked Headings" on or off; replaces the text filter. */
-  setMarkedOnly(on) {
-    this.markedOnly = on;
+  /** "Show Marked Headings" with a kind (see markFilter), or off; replaces the text filter. */
+  setMarkFilter(kind) {
+    this.markFilter = kind;
     this.filter = '';
     this.applyFilters();
     this._onDidChange.fire();
   }
 
   applyFilters() {
-    if (this.markedOnly) this.markedCount = applyMarkedFilter(this.roots);
+    if (this.markFilter) this.markedCount = applyMarkedFilter(this.roots, this.markFilter);
     else applyFilter(this.roots, this.filter);
   }
 
@@ -426,16 +841,21 @@ class HeadingsProvider {
       this.roots = [];
       this.flat = [];
       this.byId = new Map();
+      this.marks = {};
+      this.legacy = new Set();
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
-      const { headings, total, cellBytes, marksAt } = readSource(src);
+      const { headings, total, cellBytes, marks, legacy } = readSource(src, this.marksFile);
+      this.marks = marks;
+      this.legacy = legacy;
       ({ roots: this.roots, flat: this.flat } = buildTree(headings, prefix, total));
       this.byId = new Map(this.flat.map((n) => [n.id, n]));
       if (cellBytes) assignOutputSizes(this.flat, cellBytes);
       assignNumbers(this.roots, setting('numberH1', false));
       assignColorRanks(this.flat);
-      assignMarks(this.flat, marksAt, setting('inProgressMarkers', ['???', '？？？']));
+      // Marks are already matched to headings: one container, slots = indexes.
+      assignMarks(this.flat, () => marks, setting('inProgressMarkers', ['???', '？？？']), () => 0);
       summarizeMarks(this.roots);
       const starred = this.flat.filter((n) => n.star);
       if (starred.length) {
@@ -464,13 +884,12 @@ class HeadingsProvider {
   }
 
   /**
-   * The node to highlight for a document position: the section containing
-   * it, or — if that section is hidden inside a collapsed parent — the
-   * deepest ancestor that is currently visible. Following the cursor thus
+   * The node to highlight for a heading: the heading itself, or — if it is
+   * hidden inside a collapsed parent — the deepest ancestor that is
+   * currently visible. Following the cursor thus
    * never expands the tree on its own.
    */
-  visibleHeadingAt(pos) {
-    const node = headingAt(this.flat, pos);
+  visibleHeadingFor(node) {
     if (!node || !node.visible) return undefined;
     for (const n of ancestry(node)) {
       if (n === node || !this.isExpanded(n)) return n;
@@ -518,7 +937,7 @@ class HeadingsProvider {
     // Filtered views get their own ids so their all-expanded state never
     // leaks into the normal tree; starred shortcuts have their own too.
     if (ref) item.id = `${node.id}|starred`;
-    else if (this.markedOnly) item.id = `${node.id}|marked`;
+    else if (this.markFilter) item.id = `${node.id}|marked:${this.markFilter}`;
     else item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
     // Menus in package.json tell headings (and starred ones) apart by this.
     item.contextValue = node.star ? 'heading.starred' : 'heading';
@@ -605,7 +1024,9 @@ class HeadingsProvider {
  */
 function activate(context) {
   statusIconDir = vscode.Uri.joinPath(context.extensionUri, 'media', 'status');
-  const provider = new HeadingsProvider();
+  const marksFile = new MarksFile(context.workspaceState);
+  marksFile.onWrite = (file) => warnIfGitIgnored(file, context.workspaceState);
+  const provider = new HeadingsProvider(marksFile);
   const decorations = new LevelDecorations();
   const tagButton = new CellTagButton();
   // canSelectMany: Cmd/Ctrl-click and Shift-click select several headings,
@@ -625,9 +1046,28 @@ function activate(context) {
   /** Last node revealed in the tree; avoids re-revealing on every event. */
   let lastRevealed;
 
+  /**
+   * The heading last jumped to from the tree or Go to Heading. A notebook
+   * cell can hold several headings, and a position (a cell index) alone would
+   * always name the last of them; while the cursor stays in that cell, the
+   * heading actually chosen is shown instead.
+   */
+  let pinned;
+
+  /** The heading of a position: the pinned one if it is in that cell, else the last one at or before it. */
+  const headingFor = (pos) => {
+    if (pos === undefined) return undefined;
+    if (pinned && pinned.pos === pos) {
+      const fresh = provider.byId.get(pinned.id);
+      if (fresh && fresh.pos === pos) return fresh;
+    }
+    pinned = undefined;
+    return headingAt(provider.flat, pos);
+  };
+
   /** Show the exact section of `pos` in the status bar. */
   const updateStatus = (pos) => {
-    const node = pos === undefined ? undefined : headingAt(provider.flat, pos);
+    const node = headingFor(pos);
     if (!node || !setting('statusBar', true)) return status.hide();
     status.text = `$(list-tree) ${truncate(label(node), 48)}`;
     status.tooltip = ancestry(node).map(label).join('  ›  ') + '\n\n' + t('Click to show the headings view');
@@ -658,7 +1098,7 @@ function activate(context) {
     // following resumes.
     const multi = view.selection && view.selection.length > 1;
     if (!userMoved && multi) return;
-    const node = provider.visibleHeadingAt(pos);
+    const node = provider.visibleHeadingFor(headingFor(pos));
     // Skip a repeat reveal, except when it collapses a multi-selection back
     // to the heading under the user's cursor.
     if (!node || (node === lastRevealed && !multi)) return;
@@ -674,10 +1114,14 @@ function activate(context) {
   };
   /** Cursor moved in the editor: by the user, unless we just moved it. */
   const onCursor = (pos) => onPosition(pos, Date.now() >= ignoreScrollUntil);
-  /** Scrolling fires many events; only react once it settles. */
+  /**
+   * Scrolling fires many events; only react once it settles. A scroll this
+   * extension caused is ignored entirely: the cursor move that came with it
+   * already set the status bar, and the top visible line can be above the
+   * heading (a text editor keeps a few lines of context above it).
+   */
   const onScroll = debounce((pos) => {
-    if (Date.now() < ignoreScrollUntil) updateStatus(pos);
-    else onPosition(pos);
+    if (Date.now() >= ignoreScrollUntil) onPosition(pos);
   }, 150);
 
   /** Typing fires many change events; re-parse once it pauses. */
@@ -702,9 +1146,13 @@ function activate(context) {
       cur.editor = next.editor; // same document, possibly a new editor object
       return;
     }
+    // A Markdown file stays shown while focus is elsewhere, unless Markdown
+    // support has just been turned off.
+    const keep = isVisible(cur) && !(cur.kind === 'markdown' && !setting('markdown', true));
     if (next) provider.setSource(next);
-    else if (!isVisible(cur)) provider.setSource(undefined);
+    else if (!keep) provider.setSource(undefined);
     else return;
+    pinned = undefined;
     lastRevealed = undefined;
     onPosition(cursorPos(provider.source));
   };
@@ -718,7 +1166,7 @@ function activate(context) {
   const updateFilterUi = () => {
     const q = provider.filter;
     const matches = q ? provider.flat.filter((n) => n.matchAt >= 0).length : 0;
-    if (provider.markedOnly) view.description = t('Marked headings · {0}', provider.markedCount);
+    if (provider.markFilter) view.description = `${markFilterLabel(provider.markFilter)} · ${provider.markedCount}`;
     else view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
     vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', provider.filtering);
   };
@@ -733,14 +1181,45 @@ function activate(context) {
     updateFilterUi();
   };
 
-  /** "Show Marked Headings": only starred headings and open statuses. */
-  const showMarked = () => {
-    provider.setMarkedOnly(true);
-    lastRevealed = undefined;
-    updateFilterUi();
-    if (!provider.markedCount) {
-      vscode.window.showInformationMessage(t('Notebook Headings: no starred headings or open statuses yet. Right-click a heading to set one.'));
+  /** Short name of a mark filter kind, for the view description and the picker. */
+  const markFilterLabel = (kind) => {
+    if (kind === 'marked') return t('Marked headings');
+    if (kind === 'star') return t('Starred');
+    return t(statusById(kind).label);
+  };
+
+  /**
+   * "Show Marked Headings": pick what to show — every marked heading
+   * (starred or with an open status), only starred ones, or one status —
+   * with the number of headings each choice shows.
+   */
+  const showMarked = async () => {
+    const count = (kind) => provider.flat.filter((n) => matchesMarkFilter(n, kind)).length;
+    if (!provider.flat.some((n) => n.star || n.status)) {
+      vscode.window.showInformationMessage(t('Notebook Headings: no starred headings or statuses yet. Right-click a heading to set one.'));
+      return;
     }
+    const icon = (kind) => (kind === 'marked' ? 'bookmark' : kind === 'star' ? 'star-full' : statusById(kind).icon);
+    const items = MARK_FILTERS.map((kind) => ({
+      label: `$(${icon(kind)}) ${markFilterLabel(kind)}`,
+      description: kind === 'marked' ? t('starred and open · {0}', count(kind)) : `${count(kind)}`,
+      kind,
+    }));
+    const qp = vscode.window.createQuickPick();
+    qp.items = items;
+    qp.placeholder = t('Show headings that are…');
+    const current = items.find((i) => i.kind === (provider.markFilter || 'marked'));
+    if (current) qp.activeItems = [current];
+    qp.onDidAccept(() => {
+      const [pick] = qp.selectedItems;
+      qp.hide();
+      if (!pick) return;
+      provider.setMarkFilter(pick.kind);
+      lastRevealed = undefined;
+      updateFilterUi();
+    });
+    qp.onDidHide(() => qp.dispose());
+    qp.show();
   };
   const liveFilter = debounce(setFilter, 120);
 
@@ -781,7 +1260,10 @@ function activate(context) {
     // built before an edit.
     node = provider.byId.get(node.id) || node;
     lastRevealed = node;
+    pinned = node;
     quietScroll();
+    // Right away: moving within the same cell fires no selection event.
+    updateStatus(node.pos);
     if (src.kind === 'notebook') {
       if (node.pos >= src.doc.cellCount) return; // stale node after an edit
       const range = new vscode.NotebookRange(node.pos, node.pos + 1);
@@ -889,14 +1371,12 @@ function activate(context) {
         viewColumn: src.editor.viewColumn,
         preserveFocus: false,
       });
-      // Each range ends at the start of the next section's line, or at the
-      // very end of the file, so the selections cover whole lines.
+      // Whole lines, so cutting or moving a section takes its line breaks along.
       let lines = 0;
       editor.selections = ranges.map((r) => {
-        const last = Math.min(r.end, src.doc.lineCount);
-        lines += last - r.start;
-        const to = last < src.doc.lineCount ? new vscode.Position(last, 0) : src.doc.lineAt(last - 1).range.end;
-        return new vscode.Selection(new vscode.Position(r.start, 0), to);
+        const { range, lines: n } = lineRange(src.doc, r);
+        lines += n;
+        return new vscode.Selection(range.start, range.end);
       });
       editor.revealRange(new vscode.Range(ranges[0].start, 0, ranges[0].start, 0), vscode.TextEditorRevealType.AtTop);
       count = linesText(lines);
@@ -1004,13 +1484,7 @@ function activate(context) {
     if (!src || src.kind !== 'notebook' || !nodes.length) return;
     const ranges = sectionRanges(nodes);
     // Only code cells: the heading and text cells stay visible on the page.
-    const cells = [];
-    for (const r of ranges) {
-      for (let i = r.start; i < Math.min(r.end, src.doc.cellCount); i++) {
-        const cell = src.doc.cellAt(i);
-        if (isCodeCell(cell)) cells.push(cell);
-      }
-    }
+    const cells = cellsIn(src.doc, ranges).filter(isCodeCell);
     if (!cells.length) {
       vscode.window.showInformationMessage(t('Notebook Headings: this section has no code cells.'));
       return;
@@ -1021,6 +1495,51 @@ function activate(context) {
         ? t('Tags for "{0}" · {1}', truncate(nodes[0].text, 40), count)
         : t('Tags for {0} sections · {1}', nodes.length, count);
     openTagPicker(cells, title);
+  };
+
+  /**
+   * "Clear Section Outputs": remove the outputs of every code cell in one or
+   * more sections, subsections included, after a confirmation that names the
+   * number of cells and bytes. Code, metadata and execution counts are kept;
+   * the change is one undoable edit, like the editor's own Clear Outputs.
+   * `options.confirm: false` skips the question (integration tests only).
+   */
+  const clearOutputs = async (node, selected, options = {}) => {
+    const src = provider.source;
+    const nodes = targetsOf(node, selected);
+    if (!src || src.kind !== 'notebook' || !nodes.length) return;
+    const cells = cellsIn(src.doc, sectionRanges(nodes)).filter((c) => isCodeCell(c) && c.outputs.length);
+    if (!cells.length) {
+      vscode.window.showInformationMessage(t('Notebook Headings: this section has no outputs.'));
+      return;
+    }
+    const bytes = cells.reduce((sum, c) => sum + cellOutputBytes(c), 0);
+    const what = bytes ? `${cellsText(cells.length)} (${formatBytes(bytes)})` : cellsText(cells.length);
+    const where = nodes.length === 1 ? `"${truncate(nodes[0].text, 40)}"` : t('{0} sections', nodes.length);
+    if (options.confirm !== false) {
+      const ok = t('Clear Outputs');
+      const undo = process.platform === 'darwin' ? 'Cmd+Z' : 'Ctrl+Z';
+      const answer = await vscode.window.showWarningMessage(
+        t('Clear the outputs of {0} in {1}?', what, where),
+        { modal: true, detail: t('Code is kept. Undo with {0}.', undo) },
+        ok
+      );
+      if (answer !== ok) return;
+    }
+    const edit = new vscode.WorkspaceEdit();
+    edit.set(
+      src.doc.uri,
+      cells.map((cell) => {
+        const data = new vscode.NotebookCellData(cell.kind, cell.document.getText(), cell.document.languageId);
+        data.metadata = cell.metadata;
+        data.executionSummary = cell.executionSummary;
+        data.outputs = [];
+        return vscode.NotebookEdit.replaceCells(new vscode.NotebookRange(cell.index, cell.index + 1), [data]);
+      })
+    );
+    if (await vscode.workspace.applyEdit(edit)) {
+      vscode.window.setStatusBarMessage(`$(clear-all) ${t('Cleared outputs of {0}', what)}`, 4000);
+    }
   };
 
   /**
@@ -1054,30 +1573,21 @@ function activate(context) {
     if (!src || !nodes.length) return;
     const ranges = sectionRanges(nodes);
     if (src.kind === 'notebook') {
-      const blocks = [];
-      for (const r of ranges) {
-        for (let i = r.start; i < Math.min(r.end, src.doc.cellCount); i++) {
-          const cell = src.doc.cellAt(i);
-          const body = cell.document.getText();
-          if (cell.kind === vscode.NotebookCellKind.Markup) {
-            blocks.push(body);
-          } else {
-            // A fence longer than any backtick run inside the code.
-            const longest = (body.match(/`+/g) || []).reduce((m, run) => Math.max(m, run.length), 0);
-            const fence = '`'.repeat(Math.max(3, longest + 1));
-            blocks.push(`${fence}${cell.document.languageId}\n${body}\n${fence}`);
-          }
-        }
-      }
+      const blocks = cellsIn(src.doc, ranges).map((cell) => {
+        const body = cell.document.getText();
+        if (isMarkdownCell(cell)) return body;
+        // A fence longer than any backtick run inside the code.
+        const longest = (body.match(/`+/g) || []).reduce((m, run) => Math.max(m, run.length), 0);
+        const fence = '`'.repeat(Math.max(3, longest + 1));
+        return `${fence}${cell.document.languageId}\n${body}\n${fence}`;
+      });
       await copy(blocks.join('\n\n'), t('Copied {0}', cellsText(blocks.length)));
     } else {
-      const doc = src.doc;
       let lines = 0;
       const parts = ranges.map((r) => {
-        const last = Math.min(r.end, doc.lineCount);
-        lines += last - r.start;
-        const end = last < doc.lineCount ? new vscode.Position(last, 0) : doc.lineAt(last - 1).range.end;
-        return doc.getText(new vscode.Range(new vscode.Position(r.start, 0), end)).replace(/\n+$/, ''); // no trailing blank lines
+        const { range, lines: n } = lineRange(src.doc, r);
+        lines += n;
+        return src.doc.getText(range).replace(/\n+$/, ''); // no trailing blank lines
       });
       await copy(parts.join('\n\n'), t('Copied {0}', linesText(lines)));
     }
@@ -1086,28 +1596,49 @@ function activate(context) {
   // --- marks: status and star -----------------------------------------------------------
 
   /**
-   * Write a mark change to the cells holding the given headings, as one
-   * undoable edit, then redraw the tree right away.
+   * Write a mark change to the project's marks file (see MarksFile), then
+   * redraw the tree right away. The document itself is not changed, except
+   * that marks saved in a notebook's cells by version 1.5 are moved out of
+   * the cells this change touches.
    *
    * @param {object[]} nodes
-   * @param {{ status?: string|null, star?: boolean }} patch see withMark()
+   * @param {{ status?: string|null, star?: boolean }} patch see updateMarks()
    */
   const setMarks = async (nodes, patch) => {
     const src = provider.source;
-    if (!src || src.kind !== 'notebook') return false;
-    const metas = new Map(); // cell -> its new Jupyter metadata
-    for (const n of nodes) {
-      if (n.pos >= src.doc.cellCount) continue;
-      const cell = src.doc.cellAt(n.pos);
-      if (cell.kind !== vscode.NotebookCellKind.Markup) continue;
-      metas.set(cell, withMark(metas.get(cell) || jupyterMetaOf(cell), n.slot, patch));
+    if (!src || !nodes.length) return false;
+    const texts = provider.flat.map((h) => h.text);
+    // Start from the marks shown now, minus those still in the metadata of
+    // cells this change does not touch: they stay there until one of their
+    // cell's marks changes, so a notebook is edited only when needed.
+    const touched = new Set(nodes.map((n) => n.pos));
+    let marks = {};
+    for (const [i, mark] of Object.entries(provider.marks)) {
+      if (!provider.legacy.has(Number(i)) || touched.has(provider.flat[i].pos)) marks[i] = mark;
     }
-    const ok = await setJupyterMetadata([...metas]);
-    if (ok) {
-      scheduleRebuild.cancel();
-      provider.rebuild();
+    for (const n of nodes) marks = updateMarks(marks, texts, n.slot, patch);
+    try {
+      await marksFile.set(src.doc.uri, marks);
+    } catch (err) {
+      vscode.window.showErrorMessage(t('Notebook Headings: could not save the marks ({0}).', err.message));
+      return false;
     }
-    return ok;
+    // Version 1.5 marks of the touched cells now live in the file: remove
+    // them from the cells (one undoable notebook edit).
+    if (src.kind === 'notebook') {
+      const cells = [...touched]
+        .filter((pos) => pos < src.doc.cellCount && [...provider.legacy].some((i) => provider.flat[i].pos === pos))
+        .map((pos) => src.doc.cellAt(pos));
+      const changes = cells.map((cell) => {
+        const meta = JSON.parse(JSON.stringify(jupyterMetaOf(cell)));
+        delete meta[MARKS_KEY];
+        return [cell, meta];
+      });
+      if (changes.length) await setJupyterMetadata(changes);
+    }
+    scheduleRebuild.cancel();
+    provider.rebuild();
+    return true;
   };
 
   const headingsText = (nodes) =>
@@ -1117,7 +1648,7 @@ function activate(context) {
   const setStatus = async (node, selected) => {
     const src = provider.source;
     const nodes = targetsOf(node, selected);
-    if (!src || src.kind !== 'notebook' || !nodes.length) return;
+    if (!src || !nodes.length) return;
     const same = nodes.every((n) => n.status === nodes[0].status) ? nodes[0].status : undefined;
     const items = STATUSES.map((st) => ({
       label: `$(${st.icon}) ${t(st.label)}`,
@@ -1155,6 +1686,11 @@ function activate(context) {
   };
 
   // --- wiring ---------------------------------------------------------------------------
+
+  const marksWatcher = vscode.workspace.createFileSystemWatcher(`**/${MARKS_FILE.split(path.sep).join('/')}`);
+  const onMarksFileChange = () => {
+    if (provider.source) scheduleRebuild();
+  };
 
   context.subscriptions.push(
     view,
@@ -1202,6 +1738,19 @@ function activate(context) {
       if (isSourceDoc(e.document)) scheduleRebuild();
     }),
 
+    // Marks live in .vscode/notebook-headings.json: move them along with
+    // renamed documents, and redraw when that file changes on disk (another
+    // window, a git pull, a sync service).
+    vscode.workspace.onDidRenameFiles(async (e) => {
+      await marksFile.rename(e.files).catch(() => {});
+      if (provider.source) scheduleRebuild();
+    }),
+    vscode.workspace.onDidDeleteFiles((e) => marksFile.forget(e.files).catch(() => {})),
+    marksWatcher,
+    marksWatcher.onDidChange(onMarksFileChange),
+    marksWatcher.onDidCreate(onMarksFileChange),
+    marksWatcher.onDidDelete(onMarksFileChange),
+
     // Settings. Changing the default level resets expansion; anything else
     // redraws while keeping what the user has expanded.
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -1241,6 +1790,7 @@ function activate(context) {
       copy(targetsOf(node, selected).map(sectionReference).join('\n'))
     ),
     vscode.commands.registerCommand('notebookHeadings.copyContent', copyContent),
+    vscode.commands.registerCommand('notebookHeadings.clearOutputs', clearOutputs),
     vscode.commands.registerCommand('notebookHeadings.setStatus', setStatus),
     vscode.commands.registerCommand('notebookHeadings.addStar', setStar(true)),
     vscode.commands.registerCommand('notebookHeadings.removeStar', setStar(false)),
@@ -1253,6 +1803,9 @@ function activate(context) {
   // Pick up an editor that was already open when the extension activated.
   track();
   updateFilterUi();
+
+  // Internals for the integration tests in test/integration/ (not an API).
+  return { __test: { provider, view, status, marksFile, revealHeading, setMarks, clearOutputs, fixGitIgnore } };
 }
 
 function deactivate() {}

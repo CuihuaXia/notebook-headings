@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings",
   "description": "%extension.description%",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -43,7 +43,8 @@
     "onLanguage:markdown"
   ],
   "scripts": {
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
+    "test:integration": "node test/integration/run.js",
     "package": "npx -y @vscode/vsce package -o releases/",
     "install-local": "npm run package && code --install-extension releases/notebook-headings-$npm_package_version.vsix",
     "icons": "node scripts/status-icons.js"
@@ -150,6 +151,11 @@
       {
         "command": "notebookHeadings.copyContent",
         "title": "%command.copyContent%"
+      },
+      {
+        "command": "notebookHeadings.clearOutputs",
+        "title": "%command.clearOutputs%",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -224,22 +230,26 @@
         {
           "command": "notebookHeadings.copyContent",
           "when": "false"
+        },
+        {
+          "command": "notebookHeadings.clearOutputs",
+          "when": "false"
         }
       ],
       "view/item/context": [
         {
           "command": "notebookHeadings.setStatus",
-          "when": "view == notebookHeadings.view && viewItem =~ /^heading/ && notebookHeadings.isNotebook",
+          "when": "view == notebookHeadings.view && viewItem =~ /^heading/",
           "group": "0_mark@1"
         },
         {
           "command": "notebookHeadings.addStar",
-          "when": "view == notebookHeadings.view && viewItem == heading && notebookHeadings.isNotebook",
+          "when": "view == notebookHeadings.view && viewItem == heading",
           "group": "0_mark@2"
         },
         {
           "command": "notebookHeadings.removeStar",
-          "when": "view == notebookHeadings.view && viewItem == heading.starred && notebookHeadings.isNotebook",
+          "when": "view == notebookHeadings.view && viewItem == heading.starred",
           "group": "0_mark@2"
         },
         {
@@ -266,6 +276,11 @@
           "command": "notebookHeadings.copyContent",
           "when": "view == notebookHeadings.view && viewItem =~ /^heading/",
           "group": "1_copy@3"
+        },
+        {
+          "command": "notebookHeadings.clearOutputs",
+          "when": "view == notebookHeadings.view && viewItem =~ /^heading/ && notebookHeadings.isNotebook",
+          "group": "2_outputs@1"
         }
       ]
     },

@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.6.0 — 2026-10-08
+
+**New**
+
+- **Clear Section Outputs…** (right-click a notebook heading): clears the
+  outputs of a section after a confirmation; code is kept, `Cmd+Z` undoes it.
+- **Show Marked Headings** can show all marks, only stars, or one status.
+- Status marks and stars now work in **Markdown files** too.
+
+**Changed**
+
+- **Marks are kept in the project, not in your documents**, in
+  `.vscode/notebook-headings.json`. Setting a mark no longer changes the
+  notebook, and marks travel with the project to other computers. If git
+  ignores that file, the extension says so and offers **Fix .gitignore**.
+  Marks can no longer be undone with `Cmd+Z`, and renaming a document outside
+  VS Code (Finder, `git mv`) loses them.
+- Documents that git ignores keep their marks on this computer only, so their
+  paths and headings never reach the repository.
+- Marks follow their heading's text, so editing other headings no longer
+  moves them. Marks saved by 1.5.0 still work and move to the file when changed.
+- Setext (`===` / `---`) headings are recognized; headings in HTML comments
+  and front matter in a notebook's first cell are ignored. Labels drop
+  italic and strikethrough markers and decode entities like `&amp;`.
+- Output sizes use one rule in every unit (`2.5 KB`, `2 MB`, `120 MB`).
+
+**Fixed**
+
+- The status bar could show the previous section after jumping to a heading
+  in a Markdown file.
+- Clicking the first of several headings in one notebook cell showed the
+  cell's last heading.
+- Turning off `notebookHeadings.markdown` left the Markdown headings in view.
+
+**Safety**: a marks file with git conflict markers is never overwritten;
+git is only run in trusted workspace folders, with `core.fsmonitor` off.
+
 ## 1.5.0 — 2026-10-08
 
 - **Status marks**: right-click a heading → **Set Status…** to mark it TODO,

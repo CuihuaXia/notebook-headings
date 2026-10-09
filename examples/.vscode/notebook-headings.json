@@ -1,0 +1,57 @@
+{
+  "marks": {
+    "showcase.ipynb": {
+      "1": {
+        "status": "done",
+        "text": "Setup"
+      },
+      "2": {
+        "status": "done",
+        "text": "Imports"
+      },
+      "3": {
+        "status": "done",
+        "text": "Load data"
+      },
+      "5": {
+        "status": "done",
+        "text": "Missing values"
+      },
+      "6": {
+        "status": "question",
+        "text": "Outliers"
+      },
+      "8": {
+        "star": true,
+        "status": "done",
+        "text": "Price distribution"
+      },
+      "10": {
+        "status": "todo",
+        "text": "By district"
+      },
+      "13": {
+        "status": "doing",
+        "text": "Baseline model"
+      },
+      "14": {
+        "star": true,
+        "status": "todo",
+        "text": "Gradient boosting"
+      },
+      "15": {
+        "status": "todo",
+        "text": "Hyperparameter search"
+      },
+      "18": {
+        "star": true,
+        "status": "question",
+        "text": "Summary table"
+      },
+      "19": {
+        "status": "todo",
+        "text": "Next steps"
+      }
+    }
+  }
+}
