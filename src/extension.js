@@ -10,12 +10,13 @@
  *     moves, scrolling, edits, settings changes),
  *   - provide the commands contributed in package.json,
  *   - offer a "Tags" button on notebook code cells for editing their tags,
- *   - mark headings with a status or a star.
+ *   - mark headings with a status or pin them to the top.
  *
- * The only changes ever made to a document are cell metadata the user sets
- * explicitly: a cell's tags (tag picker) and a heading's marks (Set Status,
- * Add Star), each undoable with Cmd+Z. Code, text and outputs are never
- * touched.
+ * A notebook is changed only on an explicit request, each change a single
+ * undoable edit: a cell's tags (tag picker) and a section's outputs (Clear
+ * Section Outputs, after a confirmation). Code and text are never touched.
+ * Marks (Set Status, Pin to Top) never change documents: they are kept in
+ * the project's marks file (see MarksFile below).
  */
 'use strict';
 
@@ -770,11 +771,11 @@ class HeadingsProvider {
     /** tree item id -> heading node, rebuilt with the tree */
     this.byId = new Map();
     this.filter = '';
-    /** "Show Marked Headings": only headings with a star or a status */
+    /** "Show Marked Headings": only marked (pinned or with a status) sections */
     this.markedOnly = false;
     /** number of marked headings, while markedOnly */
     this.markedCount = 0;
-    /** the "Starred" group shown above the headings, or undefined */
+    /** the "Pinned" group shown above the headings, or undefined */
     this.starGroup = undefined;
     /** called after every rebuild (updates the view's filter description) */
     this.afterRebuild = undefined;
@@ -853,10 +854,11 @@ class HeadingsProvider {
       // Marks are already matched to headings: one container, slots = indexes.
       assignMarks(this.flat, () => marks, setting('toCheckMarkers', ['???', '？？？']), () => 0);
       summarizeMarks(this.roots);
-      const starred = this.flat.filter((n) => n.star);
-      if (starred.length) {
-        const group = { group: true, id: `${prefix}|starred`, text: t('Starred'), level: 0, children: [] };
-        group.children = starred.map((n) => ({ ref: n, id: `${n.id}|starred`, text: n.text, level: n.level, children: [], parent: group }));
+      // `star` is the stored name of a pin (see src/marks.js).
+      const pinned = this.flat.filter((n) => n.star);
+      if (pinned.length) {
+        const group = { group: true, id: `${prefix}|pinned`, text: t('Pinned'), level: 0, children: [] };
+        group.children = pinned.map((n) => ({ ref: n, id: `${n.id}|pinned`, text: n.text, level: n.level, children: [], parent: group }));
         this.starGroup = group;
       }
       this.applyFilters();
@@ -868,7 +870,7 @@ class HeadingsProvider {
   /**
    * Whether the tree currently shows this node's children: always while a
    * filter is active, otherwise the user's choice, otherwise the default
-   * (expanded when shallower than `defaultExpandLevel`; the Starred group
+   * (expanded when shallower than `defaultExpandLevel`; the Pinned group
    * starts expanded).
    */
   isExpanded(node) {
@@ -899,7 +901,7 @@ class HeadingsProvider {
     if (node && (node.group || node.ref)) return node.children;
     const list = node ? node.children : this.roots;
     const shown = this.filtering ? list.filter((n) => n.visible) : list;
-    // The Starred group sits above the headings, except while filtering.
+    // The Pinned group sits above the headings, except while filtering.
     return !node && this.starGroup && !this.filtering ? [this.starGroup, ...shown] : shown;
   }
 
@@ -931,12 +933,12 @@ class HeadingsProvider {
 
     const item = new vscode.TreeItem(treeLabel, state);
     // Filtered views get their own ids so their all-expanded state never
-    // leaks into the normal tree; starred shortcuts have their own too.
-    if (ref) item.id = `${node.id}|starred`;
+    // leaks into the normal tree; pinned shortcuts have their own too.
+    if (ref) item.id = `${node.id}|pinned`;
     else if (this.markedOnly) item.id = `${node.id}|marked`;
     else item.id = this.filter ? `${node.id}|filter:${this.filter}` : node.id;
-    // Menus in package.json tell headings (and starred ones) apart by this.
-    item.contextValue = node.star ? 'heading.starred' : 'heading';
+    // Menus in package.json tell headings (and pinned ones) apart by this.
+    item.contextValue = node.star ? 'heading.pinned' : 'heading';
 
     const notebook = this.source && this.source.kind === 'notebook';
     const size = notebook ? formatBytes(node.bytes) : '';
@@ -944,7 +946,7 @@ class HeadingsProvider {
     const lines = [`${'#'.repeat(node.level)} ${node.text}`, notebook ? cellsText(node.size) : t('line {0}', node.pos + 1)];
     if (size) lines.push(t('outputs: {0}', size));
     if (status) lines.push(node.autoStatus ? t('Status: {0} (from the heading text)', t(status.label)) : t('Status: {0}', t(status.label)));
-    if (node.star) lines.push(t('Starred'));
+    if (node.star) lines.push(t('Pinned'));
     const counts = countsText(node.counts);
     if (counts) lines.push(t('Marks below: {0}', counts));
     // First-level sections show every status they hold (theirs and their
@@ -957,7 +959,7 @@ class HeadingsProvider {
     item.tooltip = lines.join('\n');
 
     // Description: "34 · 2.1 MB · ○2 ➤1 ✓3 ★2" (cells, output size, then the
-    // statuses and stars below the heading, at any depth). Starred shortcuts
+    // statuses and pins below the heading, at any depth). Pinned shortcuts
     // show their path instead.
     const parts = [];
     if (ref) {
@@ -993,17 +995,17 @@ class HeadingsProvider {
     return item;
   }
 
-  /** The "Starred" group above the headings. */
+  /** The "Pinned" group above the headings. */
   groupItem(group) {
     const state = this.isExpanded(group)
       ? vscode.TreeItemCollapsibleState.Expanded
       : vscode.TreeItemCollapsibleState.Collapsed;
     const item = new vscode.TreeItem(group.text, state);
     item.id = group.id;
-    item.contextValue = 'starredGroup';
-    item.iconPath = vscode.Uri.joinPath(statusIconDir, 'star.svg');
+    item.contextValue = 'pinnedGroup';
+    item.iconPath = vscode.Uri.joinPath(statusIconDir, 'pin.svg');
     item.description = `${group.children.length}`;
-    item.tooltip = t('Starred headings, in document order. Right-click a heading → Remove Star to take it off.');
+    item.tooltip = t('Pinned headings, in document order. Right-click a heading → Unpin to take it off.');
     return item;
   }
 }
@@ -1177,10 +1179,10 @@ function activate(context) {
     updateFilterUi();
   };
 
-  /** "Show Marked Headings": only headings with a star or a status, and their parents. */
+  /** "Show Marked Headings": only marked headings (pinned or with a status), with their whole sections and their parents. */
   const showMarked = () => {
     if (!provider.flat.some((n) => n.star || n.status)) {
-      vscode.window.showInformationMessage(t('Notebook Headings: no starred headings or statuses yet. Right-click a heading to set one.'));
+      vscode.window.showInformationMessage(t('Notebook Headings: no pinned headings or statuses yet. Right-click a heading to set one.'));
       return;
     }
     provider.setMarkedOnly(true);
@@ -1261,7 +1263,7 @@ function activate(context) {
     const current = headingAt(provider.flat, cursorPos(provider.source));
     const items = provider.flat.map((node) => ({
       // Em spaces indent by depth; $(icon) renders the level shape.
-      label: `${' '.repeat(ancestry(node).length - 1)}$(${node.status ? statusById(node.status).icon : RANK_ICONS[node.rank]}) ${node.star ? '$(star-full) ' : ''}${label(node)}`,
+      label: `${' '.repeat(ancestry(node).length - 1)}$(${node.status ? statusById(node.status).icon : RANK_ICONS[node.rank]}) ${node.star ? '$(pinned) ' : ''}${label(node)}`,
       description: notebook
         ? [cellsText(node.size), formatBytes(node.bytes)].filter(Boolean).join(' · ')
         : t('line {0}', node.pos + 1),
@@ -1288,7 +1290,7 @@ function activate(context) {
    * right-clicked heading is not part of that selection, only it counts.
    */
   const targetsOf = (node, selected) => {
-    // Shortcuts in the Starred group stand for their headings; the group
+    // Shortcuts in the Pinned group stand for their headings; the group
     // itself is never a target.
     const real = (n) => (n && n.ref) || n;
     node = real(node);
@@ -1633,13 +1635,13 @@ function activate(context) {
     }
   };
 
-  /** "Add Star" / "Remove Star". */
-  const setStar = (on) => async (node, selected) => {
+  /** "Pin to Top" / "Unpin" (stored as `star`; the command ids keep the old name). */
+  const setPin = (on) => async (node, selected) => {
     const nodes = targetsOf(node, selected);
     if (!nodes.length) return;
     if (await setMarks(nodes, { star: on })) {
-      const msg = on ? t('Starred {0}', headingsText(nodes)) : t('Removed star from {0}', headingsText(nodes));
-      vscode.window.setStatusBarMessage(`$(star-${on ? 'full' : 'empty'}) ${msg}`, 3000);
+      const msg = on ? t('Pinned {0}', headingsText(nodes)) : t('Unpinned {0}', headingsText(nodes));
+      vscode.window.setStatusBarMessage(`$(${on ? 'pinned' : 'pin'}) ${msg}`, 3000);
     }
   };
 
@@ -1758,8 +1760,8 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.copyContent', copyContent),
     vscode.commands.registerCommand('notebookHeadings.clearOutputs', clearOutputs),
     vscode.commands.registerCommand('notebookHeadings.setStatus', setStatus),
-    vscode.commands.registerCommand('notebookHeadings.addStar', setStar(true)),
-    vscode.commands.registerCommand('notebookHeadings.removeStar', setStar(false)),
+    vscode.commands.registerCommand('notebookHeadings.addStar', setPin(true)),
+    vscode.commands.registerCommand('notebookHeadings.removeStar', setPin(false)),
     vscode.commands.registerCommand('notebookHeadings.showMarked', showMarked),
 
     // Pending timers must not fire after deactivation.

@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -38,7 +38,7 @@
     "collapse",
     "fold",
     "status",
-    "star",
+    "pin",
     "cell tags",
     "jupyter book",
     "large notebook"
@@ -151,12 +151,12 @@
       {
         "command": "notebookHeadings.addStar",
         "title": "%command.addStar%",
-        "icon": "$(star-empty)"
+        "icon": "$(pinned)"
       },
       {
         "command": "notebookHeadings.removeStar",
         "title": "%command.removeStar%",
-        "icon": "$(star-full)"
+        "icon": "$(pin)"
       },
       {
         "command": "notebookHeadings.showMarked",
@@ -264,7 +264,7 @@
         },
         {
           "command": "notebookHeadings.removeStar",
-          "when": "view == notebookHeadings.view && viewItem == heading.starred",
+          "when": "view == notebookHeadings.view && viewItem == heading.pinned",
           "group": "0_mark@2"
         },
         {

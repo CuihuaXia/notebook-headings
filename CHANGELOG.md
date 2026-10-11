@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.0 — 2026-10-11
+
+**Changed**
+
+- **Show Marked Headings** (bookmark button) also shows everything below a
+  marked heading, expanded, so a marked section opens down to its last level.
+- **Stars are now "Pin to Top"**, which says what they do: **Pin to Top** /
+  **Unpin** in the right-click menu, a **Pinned** group, a gold pin icon, and
+  `⤒` in summaries. Existing stars become pins; nothing to do.
+
 ## 1.7.1 — 2026-10-09
 
 **Changed**

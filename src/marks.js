@@ -1,7 +1,11 @@
 /**
- * marks.js — the pure logic of heading marks (status and star).
+ * marks.js — the pure logic of heading marks (status and pin).
  *
  * No `vscode` dependency, so it is unit-tested with plain Node.
+ *
+ * A pinned heading ("Pin to Top") is stored as `star: true`: the feature was
+ * called "star" up to 1.7, and the field keeps that name so marks saved by
+ * earlier versions still load. In code, `star` always means "pinned".
  *
  * Marks of notebooks and Markdown files alike are kept in the project's
  * `.vscode/notebook-headings.json` (see MarksFile in src/extension.js), so the
@@ -43,8 +47,8 @@ const STATUSES = [
   { id: 'done', label: 'Finished', fill: '#2EA043', icon: 'check', symbol: '✓' },
 ];
 
-/** Color of the starred-heading icon (white star on a gold circle). */
-const STAR_FILL = '#E8A317';
+/** Color of the pinned-heading icon (white pin on a gold circle). */
+const PIN_FILL = '#E8A317';
 
 const statusById = (id) => STATUSES.find((s) => s.id === id);
 
@@ -150,7 +154,7 @@ function resolveMarks(marks, texts) {
  * is resolved against the current headings and saved again under its current
  * slot together with its heading's text (which also upgrades marks saved by
  * older versions). `patch.status` null clears the status, `patch.star` false
- * removes the star; empty marks are left out.
+ * removes the pin; empty marks are left out.
  *
  * @param {Object<string, object>} marks current marks (see cleanMarks())
  * @param {string[]} texts the container's heading texts, by slot
@@ -270,11 +274,11 @@ function assignMarks(flat, marksOf, markers, containerOf = (n) => n.pos) {
   }
 }
 
-/** Whether a node carries any mark (a star or a status). */
+/** Whether a node carries any mark (a pin or a status). */
 const isMarked = (node) => node.star || !!node.status;
 
 /**
- * For every node, count the statuses and stars below it (not its own) in
+ * For every node, count the statuses and pins below it (not its own) in
  * `counts`, e.g. `{ todo: 2, doing: 1, done: 3, star: 2 }`, so a collapsed
  * parent shows what it holds, and collect the statuses found below it in
  * `below` (a Set of ids).
@@ -307,28 +311,28 @@ function summarizeMarks(roots) {
  * - `group` (a first-level section holding statuses): "group-1101.svg", a
  *   2×2 grid of the statuses in `group` (bits in STATUSES order);
  * - otherwise its own status: "todo.svg";
- * - otherwise "star.svg" when starred.
- * A star on a status or grid icon adds "-star" (a small star over it).
+ * - otherwise "pin.svg" when pinned.
+ * A pin on a status or grid icon adds "-pin" (a small pin badge over it).
  *
  * @param {{ status?: string, star?: boolean, group?: Iterable<string> }} mark
  * @returns {string|undefined}
  */
 function iconFile({ status, star, group }) {
   const set = new Set(group || []);
-  const suffix = star ? '-star' : '';
+  const suffix = star ? '-pin' : '';
   if (STATUSES.some((s) => set.has(s.id))) {
     return `group-${STATUSES.map((s) => (set.has(s.id) ? '1' : '0')).join('')}${suffix}.svg`;
   }
   if (status && statusById(status)) return `${status}${suffix}.svg`;
-  return star ? 'star.svg' : undefined;
+  return star ? 'pin.svg' : undefined;
 }
 
-/** Plain text symbol of starred headings in a summary. */
-const STAR_SYMBOL = '★';
+/** Plain text symbol of pinned headings in a summary ("to top"). */
+const PIN_SYMBOL = '⤒';
 
 /**
- * Summary text for a node's `counts`, e.g. "○2 ➤1 ✓3 ★2": statuses in
- * STATUSES order, then stars; empty when there are none.
+ * Summary text for a node's `counts`, e.g. "○2 ➤1 ✓3 ⤒2": statuses in
+ * STATUSES order, then pins; empty when there are none.
  *
  * @param {Object<string, number>} counts
  * @returns {string}
@@ -336,34 +340,36 @@ const STAR_SYMBOL = '★';
 function countsText(counts) {
   if (!counts) return '';
   const parts = STATUSES.filter((s) => counts[s.id]).map((s) => `${s.symbol}${counts[s.id]}`);
-  if (counts.star) parts.push(`${STAR_SYMBOL}${counts.star}`);
+  if (counts.star) parts.push(`${PIN_SYMBOL}${counts.star}`);
   return parts.join(' ');
 }
 
 /**
  * "Show Marked Headings": like applyFilter() in headings.js, but keeps every
- * marked heading (starred or with any status) and its ancestors.
+ * marked heading (pinned or with any status) with its whole section — all
+ * the headings below it, marked or not — and its ancestors. A filtered tree
+ * is shown fully expanded, so each marked section opens to its last level.
  *
  * @param {object[]} roots
  * @returns {number} the number of marked headings
  */
 function applyMarkedFilter(roots) {
   let count = 0;
-  const walk = (node) => {
+  const walk = (node, inMarked) => {
     node.matchAt = -1;
-    const childVisible = node.children.map(walk).some(Boolean);
     const hit = isMarked(node);
     if (hit) count++;
-    node.visible = hit || childVisible;
+    const childVisible = node.children.map((c) => walk(c, inMarked || hit)).some(Boolean);
+    node.visible = inMarked || hit || childVisible;
     return node.visible;
   };
-  roots.forEach(walk);
+  roots.forEach((r) => walk(r, false));
   return count;
 }
 
 module.exports = {
   STATUSES,
-  STAR_FILL,
+  PIN_FILL,
   statusById,
   cleanMarks,
   readMarks,

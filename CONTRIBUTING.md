@@ -60,7 +60,7 @@ through the `__test` object returned by `activate()`, which is not an API.
 - Never change the user's code or text, and change a notebook only on an
   explicit request: a cell's tags (tag picker) and clearing a section's
   outputs after a confirmation, each a single undoable `WorkspaceEdit`.
-  Marks (Set Status, Add Star) never touch documents: they go to the
+  Marks (Set Status, Pin to Top) never touch documents: they go to the
   project's `.vscode/notebook-headings.json` (`MarksFile` in
   `src/extension.js`); the one exception is removing marks saved by 1.5 from
   a cell's metadata when that cell's marks change. Rules for the marks file,
@@ -77,7 +77,7 @@ through the `__test` object returned by `activate()`, which is not an API.
     back when they would not help.
 - Tag picker logic lives in `src/tags.js` and mark logic in `src/marks.js`
   (tested in `test/tags.test.js` and `test/marks.test.js`).
-- The status and star icons in `media/status/` are generated from the colors
+- The status and pin icons in `media/status/` are generated from the colors
   in `src/marks.js` by `scripts/status-icons.js`. After changing a color or a
   glyph, run `npm run icons`; `npm test` checks that the files match.
 - README images and links use relative paths. When the extension is packaged,
@@ -88,7 +88,7 @@ through the `__test` object returned by `activate()`, which is not an API.
 ## Updating the screenshots
 
 `examples/showcase.ipynb` is made for the README screenshots: it has real
-outputs, every status, stars and cell tags. In VS Code, choose the
+outputs, every status, pins and cell tags. In VS Code, choose the
 **Screenshots (no other extensions)** launch configuration and press `F5`;
 the window opens the showcase with only this extension loaded, so no other
 extension's decorations or status bar items get into the picture. Size the
@@ -102,7 +102,7 @@ notebook-headings/
 ├── src/
 │   ├── extension.js      VS Code integration: tree view, commands, events
 │   ├── headings.js       pure logic: parsing, tree, numbering, filter (no VS Code API)
-│   ├── marks.js          pure logic of heading status and star marks (no VS Code API)
+│   ├── marks.js          pure logic of heading status and pin marks (no VS Code API)
 │   └── tags.js           pure logic of the cell tag picker (no VS Code API)
 ├── test/
 │   ├── headings.test.js  unit tests for src/headings.js (`npm test`)
@@ -115,7 +115,7 @@ notebook-headings/
 ├── media/
 │   ├── headings.svg      activity bar icon
 │   ├── icon.png          extension icon (Extensions view / Marketplace)
-│   ├── status/           status and star icons (generated, see scripts/)
+│   ├── status/           status and pin icons (generated, see scripts/)
 │   └── screenshots/      README screenshots (not packaged in the .vsix)
 ├── scripts/
 │   └── status-icons.js   generates media/status/ (`npm run icons`)

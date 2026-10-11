@@ -86,7 +86,7 @@ test('applyMarkedFilter keeps every marked heading (any status or a star) and it
   by('A1').status = 'todo';
   by('A2').status = 'done';
   by('B').star = true;
-  assert.equal(m.applyMarkedFilter(roots), 3, 'TODO, Finished and starred');
+  assert.equal(m.applyMarkedFilter(roots), 3, 'TODO, Finished and pinned');
   assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['A', 'A1', 'A2', 'B']);
   by('A2').status = undefined;
   by('B').star = false;
@@ -98,7 +98,7 @@ test('assignMarks: ??? in the text means To check; an explicit status wins', () 
   const cells = [
     { isMarkdown: true, text: '## ??? Draft\n### Plain' },
     { isMarkdown: true, text: '## ??? Overridden' },
-    { isMarkdown: true, text: '## Starred' },
+    { isMarkdown: true, text: '## Pinned' },
   ];
   const { flat } = h.buildTree(h.parseNotebookHeadings(cells), '', cells.length);
   const marks = [{ 1: { status: 'todo' } }, { 0: { status: 'done' } }, { 0: { star: true } }];
@@ -109,7 +109,7 @@ test('assignMarks: ??? in the text means To check; an explicit status wins', () 
       ['??? Draft', 'question', true, false],
       ['Plain', 'todo', false, false],
       ['??? Overridden', 'done', false, false],
-      ['Starred', undefined, false, true],
+      ['Pinned', undefined, false, true],
     ]
   );
   m.assignMarks(flat, () => ({}), []);
@@ -126,17 +126,21 @@ test('summarizeMarks counts the statuses below each node, finished included; cou
   assert.deepEqual(by('T').counts, { todo: 2, doing: 1, done: 1, star: 2 });
   assert.deepEqual(by('A1').counts, { todo: 1 });
   assert.deepEqual(by('B').counts, {});
-  assert.equal(m.countsText(by('T').counts), '○2 ➤1 ✓1 ★2');
-  assert.equal(m.countsText(by('A').counts), '○2 ➤1 ★1');
+  assert.equal(m.countsText(by('T').counts), '○2 ➤1 ✓1 ⤒2');
+  assert.equal(m.countsText(by('A').counts), '○2 ➤1 ⤒1');
   assert.equal(m.countsText({}), '');
 });
 
-test('applyMarkedFilter keeps marked headings and their ancestors', () => {
-  const cells = [{ isMarkdown: true, text: '# T\n## A\n### A1\n## B\n### B1' }];
+test('applyMarkedFilter keeps the whole section of a marked heading, all levels down', () => {
+  const cells = [{ isMarkdown: true, text: '# T\n## A\n### A1\n#### A1a\n##### A1a1\n### A2\n## B\n### B1' }];
   const { roots, flat } = h.buildTree(h.parseNotebookHeadings(cells), '', 1);
-  flat.forEach((n) => ((n.star = n.text === 'A1'), (n.status = n.text === 'B1' ? 'done' : undefined)));
-  assert.equal(m.applyMarkedFilter(roots), 2);
-  assert.deepEqual(flat.filter((n) => n.visible).map((n) => n.text), ['T', 'A', 'A1', 'B', 'B1']);
+  const visible = () => flat.filter((n) => n.visible).map((n) => n.text);
+  flat.forEach((n) => (n.star = n.text === 'A1'));
+  assert.equal(m.applyMarkedFilter(roots), 1, 'only marked headings are counted');
+  assert.deepEqual(visible(), ['T', 'A', 'A1', 'A1a', 'A1a1'], 'A1 with its section and parents; not A2 or B');
+  flat.forEach((n) => ((n.star = false), (n.status = n.text === 'A' ? 'todo' : undefined)));
+  assert.equal(m.applyMarkedFilter(roots), 1);
+  assert.deepEqual(visible(), ['T', 'A', 'A1', 'A1a', 'A1a1', 'A2']);
 });
 
 test('every status has a unique id, a codicon, a summary symbol and an icon file in its color', () => {
@@ -172,10 +176,10 @@ test('summarizeMarks collects every status below; iconFile picks grid, status, s
   assert.deepEqual([...by('T').below].sort(), ['doing', 'done', 'question']);
   assert.equal(by('B').below.size, 0);
   assert.equal(m.iconFile({ group: ['doing', 'done'] }), 'group-0101.svg');
-  assert.equal(m.iconFile({ group: ['todo', 'doing', 'question', 'done'], star: true, status: 'todo' }), 'group-1111-star.svg');
+  assert.equal(m.iconFile({ group: ['todo', 'doing', 'question', 'done'], star: true, status: 'todo' }), 'group-1111-pin.svg');
   assert.equal(m.iconFile({ group: [], status: 'question' }), 'question.svg');
-  assert.equal(m.iconFile({ status: 'done', star: true }), 'done-star.svg');
-  assert.equal(m.iconFile({ star: true }), 'star.svg');
+  assert.equal(m.iconFile({ status: 'done', star: true }), 'done-pin.svg');
+  assert.equal(m.iconFile({ star: true }), 'pin.svg');
   assert.equal(m.iconFile({}), undefined);
 });
 
@@ -184,10 +188,10 @@ test('the icon files on disk match STATUSES (run npm run icons after changes)', 
     for (const star of [false, true]) {
       const name = m.iconFile({ status: s.id, star });
       const svg = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'media', 'status', name), 'utf8');
-      assert.ok(svg.includes(s.fill) && svg.includes(m.STAR_FILL) === star, name);
+      assert.ok(svg.includes(s.fill) && svg.includes(m.PIN_FILL) === star, name);
     }
   }
-  assert.ok(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'media', 'status', 'star.svg'), 'utf8').includes(m.STAR_FILL));
+  assert.ok(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'media', 'status', 'pin.svg'), 'utf8').includes(m.PIN_FILL));
   const fs = require('node:fs');
   const path = require('node:path');
   const dir = path.join(__dirname, '..', 'media', 'status');
@@ -197,7 +201,7 @@ test('the icon files on disk match STATUSES (run npm run icons after changes)', 
       const name = m.iconFile({ group: ids, star });
       const svg = fs.readFileSync(path.join(dir, name), 'utf8');
       for (const s of m.STATUSES) assert.equal(svg.includes(s.fill), ids.includes(s.id), `${name} ${s.id}`);
-      assert.equal(svg.includes(m.STAR_FILL), star, `${name} star`);
+      assert.equal(svg.includes(m.PIN_FILL), star, `${name} pin`);
     }
   }
 });

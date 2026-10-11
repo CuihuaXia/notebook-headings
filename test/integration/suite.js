@@ -188,18 +188,39 @@ const tests = [
     },
   ],
   [
-    'Notebook: Show Marked Headings shows every marked heading and its parents',
+    'Notebook: Show Marked Headings shows every marked heading with its whole section, expanded',
     async () => {
       await openNotebook('showcase.ipynb');
+      // Set up a marked section with an unmarked subheading, whatever marks
+      // earlier tests left; everything is put back at the end.
+      const below = (n) => n.children.flatMap((c) => [c, ...below(c)]);
+      // The unmarked subheading is a last-level one, so only the new rule can
+      // show it (not a marked heading below it).
+      const isLeaf = (c) => !c.autoStatus && !c.children.length;
+      const target = provider().flat.find((n) => n.rank !== 0 && below(n).some(isLeaf));
+      assert.ok(target, 'showcase.ipynb has a section with subheadings');
+      const leaf = below(target).find(isLeaf);
+      const leafWas = { status: leaf.status || null, star: !!leaf.star };
+      const pinned = !target.star && !target.status;
+      assert.ok(await api.setMarks([leaf], { status: null, star: false }));
+      if (pinned) assert.ok(await api.setMarks([provider().byId.get(target.id)], { star: true }));
       await vscode.commands.executeCommand('notebookHeadings.showMarked');
       const flat = provider().flat;
       const marked = flat.filter((n) => n.star || n.status);
       assert.ok(marked.some((n) => n.status === 'done'), 'finished headings are shown too');
       assert.ok(marked.every((n) => n.visible));
-      assert.ok(flat.filter((n) => n.visible).every((n) => n.star || n.status || n.children.some((c) => c.visible)));
+      const inMarked = (n) => { for (let p = n.parent; p; p = p.parent) if (p.star || p.status) return true; return false; };
+      const section = provider().byId.get(target.id);
+      assert.ok(!provider().byId.get(leaf.id).star && !provider().byId.get(leaf.id).status, 'the subheading is unmarked');
+      assert.ok(below(section).every((c) => c.visible), 'the whole section of a marked heading is shown');
+      assert.ok(provider().byId.get(leaf.id).visible, 'including an unmarked last-level subheading');
+      assert.equal(provider().getTreeItem(section).collapsibleState, vscode.TreeItemCollapsibleState.Expanded, 'and expanded');
+      assert.ok(flat.filter((n) => n.visible).every((n) => n.star || n.status || inMarked(n) || n.children.some((c) => c.visible)));
       assert.equal(provider().markedCount, marked.length);
       await vscode.commands.executeCommand('notebookHeadings.clearFilter');
       assert.ok(provider().flat.every((n) => n.visible));
+      assert.ok(await api.setMarks([provider().byId.get(leaf.id)], leafWas));
+      if (pinned) assert.ok(await api.setMarks([provider().byId.get(target.id)], { star: false }));
       const draft = flat.find((n) => n.autoStatus);
       assert.ok(draft, 'showcase.ipynb has a heading with ???');
       assert.equal(draft.status, 'question', '??? means To check');

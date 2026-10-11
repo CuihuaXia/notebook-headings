@@ -10,7 +10,7 @@ notebook with 1,000+ headings. Notebook Headings keeps all six heading levels
 but opens the tree expanded only to the level you choose (default: `##`), so
 you see the structure first and drill down on demand.
 
-<img src="media/screenshots/notebook.png" alt="Notebook Headings view for a Jupyter notebook: a Starred group, numbered and color-coded headings with status icons, cell counts, output sizes and mark summaries, and the right-click menu" width="800">
+<img src="media/screenshots/notebook.png" alt="Notebook Headings view for a Jupyter notebook: a Pinned group, numbered and color-coded headings with status icons, cell counts, output sizes and mark summaries, and the right-click menu" width="800">
 
 ## Quick start
 
@@ -63,11 +63,11 @@ you see the structure first and drill down on demand.
   In progress, To check or Finished; its level shape turns into a filled,
   colored status icon. Headings containing `???` count as To check
   automatically.
-- **Stars.** **Add Star** puts a gold star icon before a heading and lists it
-  in a **Starred** group at the top of the view, one click away.
+- **Pin to top.** **Pin to Top** puts a gold pin icon before a heading and
+  lists it in a **Pinned** group at the top of the view, one click away.
 - **Marks stay visible when collapsed.** Every parent sums up the marks below
-  it, e.g. `○2 ➤1 ✓3 ★2` (○ TODO, ➤ In progress, ? To check, ✓ Finished,
-  ★ starred), and the bookmark button shows only the marked headings.
+  it, e.g. `○2 ➤1 ✓3 ⤒2` (○ TODO, ➤ In progress, ? To check, ✓ Finished,
+  ⤒ pinned), and the bookmark button shows only the marked sections.
   Marks are kept in the project, not in your documents, so they follow you
   to another computer.
 - **Clear a section's outputs** (right-click → **Clear Section Outputs…**):
@@ -147,7 +147,7 @@ View toolbar, left to right:
 | Button | Action |
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
-| Show Marked Headings (bookmark) | Only the headings with a star or any status, with their parents. ✕ goes back. |
+| Show Marked Headings (bookmark) | Only the headings that are pinned or have any status, each with its whole section expanded below it, and their parents. ✕ goes back. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 
@@ -156,8 +156,8 @@ Right-click a heading for:
 - **Set Status…**: TODO, In progress, To check, Finished, or Clear
   Status. A heading whose text contains `???` counts as To check until you
   set another status or remove the `???`.
-- **Add Star** / **Remove Star**: starred headings are listed in
-  the **Starred** group at the top of the view; click one to jump there.
+- **Pin to Top** / **Unpin**: pinned headings are listed in the **Pinned**
+  group at the top of the view; click one to jump there.
 - **Select Section**: selects every cell (notebook) or line (Markdown) of the
   section, subsections included, and moves focus to the editor. Then use
   `Cmd+X` / `Cmd+V` to move it, `Cmd+C` to copy it, or run or delete the
@@ -182,7 +182,7 @@ Right-click a heading for:
   the sections worth clearing.
 
 Select several headings with `Cmd`/`Ctrl`-click or `Shift`-click, then
-right-click one of them: **Set Status…** and the star commands mark all of
+right-click one of them: **Set Status…** and the pin commands mark all of
 them, **Clear Section Outputs…** clears all of them, **Select Section** selects all their sections at once (nested or
 adjacent sections are merged, so no cell is selected twice), **Edit Section
 Tags…** tags the code cells of all of them, and the copy commands copy one
@@ -228,7 +228,7 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.markdown` | `true` | Also handle Markdown files. |
 | `notebookHeadings.toCheckMarkers` | `["???", "？？？"]` | Text that makes a heading show as To check; `[]` turns it off. |
 
-### Status marks and stars
+### Status marks and pins
 
 | Icon | Status | In summaries |
 | --- | --- | --- |
@@ -236,12 +236,12 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | teal circle with a play arrow | In progress | `➤` |
 | indigo circle with a question mark | To check (also any heading containing `???`) | `?` |
 | green circle with a check | Finished | `✓` |
-| gold circle with a star | Starred (a small star over a status icon) | `★` |
+| gold circle with a pin | Pinned (a small pin over a status icon) | `⤒` |
 
 A first-level section that holds statuses shows them as a 2×2 grid of small
 icons instead: top left TODO, top right In progress, bottom left To check,
-bottom right Finished. **Show Marked Headings** shows every heading with a
-star or any status, Finished included.
+bottom right Finished. **Show Marked Headings** shows every heading that is
+pinned or has any status, Finished included, with its whole section expanded.
 
 ### Where marks are stored
 
@@ -311,7 +311,7 @@ To set colors for one theme only, nest them under the theme name, e.g.
 - Label colors rely on VS Code's file-decoration mechanism, which is why every
   heading has an icon in front of it.
 - The grey text after a heading can only hold plain text, so mark summaries
-  use symbols (`○ ➤ ? ✓ ★`) rather than the colored icons.
+  use symbols (`○ ➤ ? ✓ ⤒`) rather than the colored icons.
 - Marks (see [Where marks are stored](#where-marks-are-stored)) cannot be
   undone with `Cmd+Z`, are lost when a document is renamed outside VS Code
   (Finder, `git mv`), and may move to the nearest same-named heading when one

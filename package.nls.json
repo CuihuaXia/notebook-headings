@@ -1,5 +1,5 @@
 {
-  "extension.description": "Heading outline for large Jupyter notebooks and Markdown: opens collapsed to a chosen level, with numbering, status marks, stars, cell tags and section tools.",
+  "extension.description": "Heading outline for large Jupyter notebooks and Markdown: opens collapsed to a chosen level, with numbering, status marks, pinning, cell tags and section tools.",
   "view.welcome": "Open a Jupyter notebook or a Markdown file to see its headings.",
   "command.quickJump": "Notebook Headings: Go to Heading…",
   "command.filter": "Filter Headings",
@@ -29,8 +29,8 @@
   "command.editSectionTags": "Edit Section Tags…",
   "command.copyReference": "Copy Section Reference",
   "command.setStatus": "Set Status…",
-  "command.addStar": "Add Star",
-  "command.removeStar": "Remove Star",
+  "command.addStar": "Pin to Top",
+  "command.removeStar": "Unpin",
   "command.showMarked": "Show Marked Headings…",
   "command.copyContent": "Copy Section Content",
   "config.toCheckMarkers": "Headings whose text contains one of these markers show as \"To check\" without setting a status, e.g. \"## ??? Analysis\". An empty list turns this off.",
