@@ -227,6 +227,65 @@ const tests = [
     },
   ],
   [
+    'Show Marked Headings lists the marked headings of the whole project, by file',
+    async () => {
+      // Documents that are not open: two with ??? headings, one without marks.
+      const ws = vscode.workspace.workspaceFolders[0].uri.fsPath;
+      const extra = { 'extra.md': '# Plan\n\n## Draft ???\n\ntext\n\n## Done\n', 'notes/plain.md': '# Notes\n\n## Nothing marked\n' };
+      extra['other.ipynb'] = JSON.stringify({ cells: [{ cell_type: 'markdown', metadata: {}, source: ['# Other\n', '## Check this ???'] }], metadata: {}, nbformat: 4, nbformat_minor: 5 });
+      for (const [name, text] of Object.entries(extra)) {
+        fs.mkdirSync(path.dirname(path.join(ws, name)), { recursive: true });
+        fs.writeFileSync(path.join(ws, name), text);
+      }
+      try {
+        await openNotebook('showcase.ipynb');
+        await vscode.commands.executeCommand('notebookHeadings.showMarked');
+        const files = () => provider().fileNodes;
+        assert.equal(files()[0].rel, 'showcase.ipynb', 'the current document comes first');
+        assert.ok(files()[0].current);
+        const byRel = (rel) => files().find((f) => f.rel === rel);
+        const md = byRel('extra.md');
+        assert.ok(md, 'a document that is not open is listed');
+        const draft = md.flat.find((n) => n.text === 'Draft ???');
+        assert.equal(draft.status, 'question', '??? in another document counts as To check');
+        assert.ok(draft.visible);
+        assert.ok(!md.flat.find((n) => n.text === 'Done').visible, 'unmarked headings of other documents stay hidden');
+        assert.ok(byRel('other.ipynb').flat.some((n) => n.text === 'Check this ???' && n.status === 'question'), 'notebooks on disk are read too');
+        assert.ok(!byRel('notes/plain.md'), 'documents without marks are not listed');
+        assert.deepEqual(provider().getChildren(), files());
+        assert.equal(provider().getParent(draft), md, 'the document title (# Plan) is left out under its file');
+        assert.ok(!provider().getChildren(md).some((n) => n.text === 'Plan'));
+        assert.ok(provider().getChildren(md).includes(draft));
+        const label = provider().getTreeItem(md).label;
+        assert.deepEqual(label.highlights, [[0, 'extra.md'.length]], 'file names are highlighted');
+        assert.equal(provider().getTreeItem(draft).contextValue, 'projectHeading', 'no menu on other documents');
+        assert.match(api.view.description, /\d+ in \d+ files/);
+        // The badge counts TODO and To check headings in every document.
+        const open = files().reduce((sum, f) => sum + f.flat.filter((n) => n.status === 'todo' || n.status === 'question').length, 0);
+        assert.ok(open > 0 && api.view.badge && api.view.badge.value === open, 'badge counts the whole project');
+        // Clicking a heading of another document opens it there.
+        await api.revealHeading(draft);
+        await until(() => provider().source && provider().source.doc.uri.fsPath.endsWith('extra.md'), 'extra.md opened');
+        const editor = vscode.window.activeTextEditor;
+        assert.equal(editor.selection.active.line, draft.pos);
+        assert.equal(files().filter((f) => f.rel === 'extra.md').length, 1, 'the new current document is not listed twice');
+        await until(() => files()[0] && files()[0].rel === 'extra.md' && byRel('showcase.ipynb'), 'the list follows the new current document');
+        assert.ok(provider().markedOnly);
+        await vscode.commands.executeCommand('notebookHeadings.clearFilter');
+        assert.ok(!provider().markedOnly && !provider().fileNodes.length);
+        assert.equal(api.view.badge && api.view.badge.value, open, 'the badge stays when the list is closed');
+        // A document written outside VS Code (git, another editor) is counted too.
+        fs.writeFileSync(path.join(ws, 'later.md'), '# Later\n\n## Look again ???\n');
+        extra['later.md'] = '';
+        await until(() => api.view.badge && api.view.badge.value === open + 1, 'badge counts a document created on disk');
+      } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        for (const name of Object.keys(extra)) fs.rmSync(path.join(ws, name), { force: true });
+        fs.rmSync(path.join(ws, 'notes'), { recursive: true, force: true });
+      }
+    },
+  ],
+  [
     'Notebook: Clear Section Outputs clears only that section and keeps the code',
     async () => {
       const nb = await openNotebook('showcase.ipynb');

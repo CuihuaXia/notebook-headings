@@ -405,3 +405,20 @@ test('examples/sample.md parses as expected', () => {
     ]
   );
 });
+
+test('notebookCellsFromJson reads cells of an .ipynb text; bad files give no cells', () => {
+  const json = JSON.stringify({
+    cells: [
+      { cell_type: 'markdown', metadata: { tags: ['x'] }, source: ['## A\n', 'text'] },
+      { cell_type: 'code', metadata: {}, source: '# not a heading', outputs: [{ text: 'out' }] },
+      { cell_type: 'markdown', source: '### B' },
+    ],
+  });
+  const cells = h.notebookCellsFromJson(json);
+  assert.deepEqual(cells.map((c) => [c.isMarkdown, c.text]), [[true, '## A\ntext'], [false, ''], [true, '### B']]);
+  assert.deepEqual(cells[0].meta, { tags: ['x'] });
+  assert.deepEqual(cells[2].meta, {});
+  assert.deepEqual(h.parseNotebookHeadings(cells).map((x) => x.text), ['A', 'B']);
+  assert.deepEqual(h.notebookCellsFromJson('{ not json'), []);
+  assert.deepEqual(h.notebookCellsFromJson('{"cells": 3}'), []);
+});

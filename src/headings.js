@@ -181,6 +181,34 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
 }
 
 /**
+ * The cells of a notebook read from its .ipynb text, for notebooks that are
+ * not open in VS Code: whether each is Markdown, its text (empty for code
+ * cells, which are never parsed) and its Jupyter metadata. A file that is not
+ * a valid notebook gives no cells.
+ *
+ * @param {string} json contents of an .ipynb file
+ * @returns {{ isMarkdown: boolean, text: string, meta: object }[]}
+ */
+function notebookCellsFromJson(json) {
+  let nb;
+  try {
+    nb = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!nb || !Array.isArray(nb.cells)) return [];
+  const join = (src) => (Array.isArray(src) ? src.join('') : typeof src === 'string' ? src : '');
+  return nb.cells.map((c) => {
+    const isMarkdown = c && c.cell_type === 'markdown';
+    return {
+      isMarkdown,
+      text: isMarkdown ? join(c.source) : '',
+      meta: (c && typeof c.metadata === 'object' && c.metadata) || {},
+    };
+  });
+}
+
+/**
  * Headings of a notebook. Only Markdown cells are scanned; a heading's
  * position is the index of the cell that contains it, and its slot is its
  * index among the headings of that cell (0 for the first), which is how its
@@ -471,6 +499,7 @@ function labelOf(node, numbered) {
 module.exports = {
   cleanText,
   scanHeadings,
+  notebookCellsFromJson,
   parseNotebookHeadings,
   parseMarkdownHeadings,
   buildTree,

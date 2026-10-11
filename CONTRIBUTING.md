@@ -38,7 +38,7 @@ and `examples/` are not touched. Set `VSCODE_BIN` to the VS Code executable if
 it is not in the default macOS location. The tests cover what unit tests
 cannot: the status bar after a jump, marks saved to the marks file
 (including renames, outside changes and the safety rules below), the mark
-filter, and Clear Section Outputs. They reach the extension's internals
+filter (also across the project's files), and Clear Section Outputs. They reach the extension's internals
 through the `__test` object returned by `activate()`, which is not an API.
 
 ## Making changes

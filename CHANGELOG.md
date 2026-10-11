@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.9.0 — 2026-10-11
+
+**New**
+
+- **Show Marked Headings** (bookmark button) now lists the marked headings of
+  every notebook and Markdown file in the project, grouped by file with the
+  current one first, including headings with `???` in files that are not
+  open. File names have a background, so each file stands apart, and a
+  file's only top title is left out when it has no mark. Click a heading in
+  another file to open it there.
+- A number on the view's icon in the activity bar shows how many headings
+  in the project are still TODO or To check.
+
+**Changed**
+
+- The command is now called "Show Marked Headings" (no "…"): it no longer
+  opens a picker.
+
 ## 1.8.0 — 2026-10-11
 
 **Changed**

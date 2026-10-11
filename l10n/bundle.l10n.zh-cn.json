@@ -78,5 +78,13 @@
   "Pinned": "已置顶",
   "Pinned headings, in document order. Right-click a heading → Unpin to take it off.": "置顶的标题，按文档顺序排列。右键标题 → 取消置顶即可移除。",
   "Pinned {0}": "已置顶 {0}",
-  "Unpinned {0}": "已取消置顶 {0}"
+  "Unpinned {0}": "已取消置顶 {0}",
+  "1 marked heading": "1 个有标记的标题",
+  "{0} marked headings": "{0} 个有标记的标题",
+  "Looking for marks in the project…": "正在项目里查找标记…",
+  "Marked headings · {0} in {1} files": "有标记的标题 · {1} 个文件中共 {0} 个",
+  "1 heading to do or to check in this project": "这个项目里有 1 个待做或待核对的标题",
+  "{0} headings to do or to check in this project": "这个项目里有 {0} 个待做或待核对的标题",
+  "Notebook Headings: could not open {0} ({1}).": "Notebook Headings：无法打开 {0}（{1}）。",
+  "Notebook Headings: open a notebook or Markdown file first.": "Notebook Headings：请先打开一个 notebook 或 Markdown 文件。"
 }

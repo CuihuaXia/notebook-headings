@@ -67,7 +67,8 @@ you see the structure first and drill down on demand.
   lists it in a **Pinned** group at the top of the view, one click away.
 - **Marks stay visible when collapsed.** Every parent sums up the marks below
   it, e.g. `○2 ➤1 ✓3 ⤒2` (○ TODO, ➤ In progress, ? To check, ✓ Finished,
-  ⤒ pinned), and the bookmark button shows only the marked sections.
+  ⤒ pinned), and the bookmark button lists the marked sections of every
+  document in the project, by file.
   Marks are kept in the project, not in your documents, so they follow you
   to another computer.
 - **Clear a section's outputs** (right-click → **Clear Section Outputs…**):
@@ -147,7 +148,7 @@ View toolbar, left to right:
 | Button | Action |
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
-| Show Marked Headings (bookmark) | Only the headings that are pinned or have any status, each with its whole section expanded below it, and their parents. ✕ goes back. |
+| Show Marked Headings (bookmark) | The marked headings (pinned or with any status) of every notebook and Markdown file in the project, grouped by file with the current one first; each with its whole section expanded. Click a heading in another file to open it there. ✕ goes back. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 
@@ -241,7 +242,11 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 A first-level section that holds statuses shows them as a 2×2 grid of small
 icons instead: top left TODO, top right In progress, bottom left To check,
 bottom right Finished. **Show Marked Headings** shows every heading that is
-pinned or has any status, Finished included, with its whole section expanded.
+pinned or has any status, Finished included, with its whole section expanded,
+in every notebook and Markdown file of the project (the folder that holds the
+marks file); headings with `???` are found in files that are not open, too.
+The number on the view's icon in the activity bar counts the headings still
+TODO or To check in the whole project.
 
 ### Where marks are stored
 
