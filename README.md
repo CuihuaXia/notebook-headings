@@ -252,7 +252,10 @@ pinned or has any status, Finished included, with its whole section expanded,
 in every notebook and Markdown file of the project (the folder that holds the
 marks file); headings with `???` are found in files that are not open, too.
 The number on the view's icon in the activity bar counts the headings still
-TODO or To check in the whole project.
+TODO or To check in the whole project. Online-only files of a cloud drive
+are not downloaded to look for `???` (only marks already set in them are
+shown), and a document outside your workspace folders has its folder
+searched only when you click the bookmark.
 
 ### Where marks are stored
 

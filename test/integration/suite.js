@@ -453,6 +453,25 @@ const tests = [
     },
   ],
   [
+    'Outside the workspace: the folder is searched for marks only when Show Marked Headings asks',
+    async () => {
+      const outside = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'nh-proj-'));
+      try {
+        fs.writeFileSync(path.join(outside, 'open.md'), '# Open\n\n## Here\n');
+        fs.writeFileSync(path.join(outside, 'other.md'), '# Other\n\n## Check this ???\n');
+        await openMarkdown(path.relative(vscode.workspace.workspaceFolders[0].uri.fsPath, path.join(outside, 'open.md')));
+        await api.refreshProject();
+        assert.equal(provider().projectFiles.length, 0, 'no background search outside the workspace');
+        await vscode.commands.executeCommand('notebookHeadings.showMarked');
+        assert.ok(provider().fileNodes.some((f) => f.rel === 'other.md'), 'Show Marked Headings searches it');
+        await vscode.commands.executeCommand('notebookHeadings.clearFilter');
+      } finally {
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        fs.rmSync(outside, { recursive: true, force: true });
+      }
+    },
+  ],
+  [
     'Outside the workspace: git is not run; repository files stay local, others travel with their folder',
     async () => {
       const { execFileSync } = require('node:child_process');

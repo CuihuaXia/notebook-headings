@@ -257,17 +257,9 @@ function headingsAndMarks(kind, input, stored) {
 }
 
 /**
- * headingsAndMarks() of a document open in VS Code (the source), read from
- * the editor so unsaved changes count.
- *
- * @param {object} source
- * @param {MarksFile} marksFile where marks are kept
+ * headingsAndMarks() of a NotebookDocument or TextDocument open in VS Code,
+ * read from the editor so unsaved changes count.
  */
-function readSource(source, marksFile) {
-  return readOpenDocument(source.kind, source.doc, marksFile);
-}
-
-/** headingsAndMarks() of an open NotebookDocument or TextDocument. */
 function readOpenDocument(kind, doc, marksFile) {
   if (kind === 'notebook') {
     const custom = useCustomMetadata();
@@ -564,6 +556,11 @@ class ProjectMarks {
     } catch {
       return undefined;
     }
+    // An online-only file of a cloud drive (macOS keeps its size but no data
+    // on disk): reading it would download it, so it is read only when the
+    // marks file has marks for it. A to-check marker in it is not found.
+    const stored = this.marksFile.get(uri);
+    if (st.size > 0 && st.blocks === 0 && !Object.keys(stored).length) return undefined;
     const key = uri.toString();
     const stamp = `${markers.join('\u0000')}`;
     let c = this.cache.get(key);
@@ -577,7 +574,6 @@ class ProjectMarks {
       }
       this.cache.set(key, c);
     }
-    const stored = this.marksFile.get(uri);
     if (!c.hint && !Object.keys(stored).length) return undefined;
     if (!c.cells && !c.text) {
       // Marks in the marks file but nothing parsed yet (no marker in the text).
@@ -604,9 +600,8 @@ class ProjectMarks {
    * relative to the project, and its tree filtered by applyMarkedFilter().
    *
    * @param {vscode.Uri} current
-   * @param {(done: number, total: number) => void} [progress]
    */
-  async collect(current, progress) {
+  async collect(current) {
     const root = projectRoot(this.marksFile, current);
     if (!root) return [];
     const markers = setting('toCheckMarkers', ['???', '？？？']);
@@ -614,8 +609,7 @@ class ProjectMarks {
     const found = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.Uri.file(root), '**/*.{ipynb,md}'), PROJECT_EXCLUDE, MAX_PROJECT_FILES);
     const files = found.filter((u) => u.toString() !== current.toString());
     const out = [];
-    for (let i = 0; i < files.length; i++) {
-      const uri = files[i];
+    for (const uri of files) {
       const kind = uri.path.toLowerCase().endsWith('.ipynb') ? 'notebook' : 'markdown';
       if (kind === 'markdown' && !setting('markdown', true)) continue;
       const open =
@@ -623,7 +617,6 @@ class ProjectMarks {
           ? vscode.workspace.notebookDocuments.find((d) => d.uri.toString() === uri.toString())
           : vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
       const read = open ? readOpenDocument(kind, open, this.marksFile) : await this.readStored(uri, kind, markers);
-      if (progress) progress(i + 1, files.length);
       if (!read || !read.headings.length) continue;
       const { roots, flat } = buildDocTree(read, `${SESSION}|project|${uri.toString()}|`);
       const count = applyMarkedFilter(roots);
@@ -827,8 +820,8 @@ function metadataWithTags(cell, tags) {
 
 /**
  * Replace the Jupyter metadata of one or more cells of a notebook in a single
- * WorkspaceEdit, so one Cmd+Z undoes the whole change. Used for tags and
- * marks, the only edits this extension makes.
+ * WorkspaceEdit, so one Cmd+Z undoes the whole change. Used for tags, and
+ * to move version 1.5 marks out of cells (see setMarks()).
  *
  * @param {[object, object][]} changes [cell, its new Jupyter metadata] pairs
  */
@@ -867,7 +860,8 @@ class CellTagButton {
     if (!setting('cellTagButton', true)) return [];
     const tags = getCellTags(cell);
     // The offered tags collapse code and outputs, so the button belongs on code
-    // cells; a Markdown cell shows it only when it already has tags to edit.
+    // cells; a Markdown cell shows it only when it already has tags to edit
+    // (VS Code shows a Markdown cell's status bar only while it is edited).
     if (!isCodeCell(cell) && !tags.length) return [];
     return [
       {
@@ -916,7 +910,7 @@ class HeadingsProvider {
   /** @param {MarksFile} marksFile where marks are kept */
   constructor(marksFile) {
     this.marksFile = marksFile;
-    /** marks of the current document by heading index, with texts (see readSource()) */
+    /** marks of the current document by heading index, with texts (see headingsAndMarks()) */
     this.marks = {};
     /** heading indexes whose mark is still in cell metadata (version 1.5) */
     this.legacy = new Set();
@@ -1046,7 +1040,7 @@ class HeadingsProvider {
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
-      const read = readSource(src, this.marksFile);
+      const read = readOpenDocument(src.kind, src.doc, this.marksFile);
       this.marks = read.marks;
       this.legacy = read.legacy;
       ({ roots: this.roots, flat: this.flat } = buildDocTree(read, prefix));
@@ -1168,7 +1162,7 @@ class HeadingsProvider {
     }
     item.tooltip = lines.join('\n');
 
-    // Description: "34 · 2.1 MB · ○2 ➤1 ✓3 ★2" (cells, output size, then the
+    // Description: "34 · 2.1 MB · ○2 ➤1 ✓3 ⤒2" (cells, output size, then the
     // statuses and pins below the heading, at any depth). Pinned shortcuts
     // show their path instead.
     const parts = [];
@@ -1182,7 +1176,7 @@ class HeadingsProvider {
     }
     if (parts.length) item.description = parts.join(' · ');
 
-    // A status, star or (first-level) grid of statuses replaces the level
+    // A status, pin or (first-level) grid of statuses replaces the level
     // shape so marked sections stand out; see iconFile() in src/marks.js.
     const marked = iconFile({ status: node.status, star: node.star, group });
     if (marked) {
@@ -1385,6 +1379,7 @@ function activate(context) {
   };
 
   const isSourceDoc = (doc) => !!provider.source && provider.source.doc === doc;
+  const isSourceUri = (uri) => !!provider.source && provider.source.doc.uri.toString() === uri.toString();
 
   // --- filter ---------------------------------------------------------------------------
 
@@ -1440,7 +1435,9 @@ function activate(context) {
   /**
    * Re-read the other documents of the current project, for Show Marked
    * Headings and the badge (only what changed is parsed again). Results of
-   * an older call that finishes late are dropped.
+   * an older call that finishes late are dropped. A document outside every
+   * workspace folder has its own folder as project, which may be very large
+   * (a home folder), so it is only searched when Show Marked Headings asks.
    *
    * @param {boolean} [visible] show progress in the view (the first time)
    */
@@ -1448,11 +1445,11 @@ function activate(context) {
   const refreshProject = async (visible = false) => {
     const run = ++projectRun;
     const src = provider.source;
-    if (!src) return provider.setProjectFiles([]);
-    const work = (progress) =>
-      projectMarks.collect(src.doc.uri, progress).catch(() => []);
+    const background = !visible && !provider.markedOnly;
+    if (!src || (background && !vscode.workspace.getWorkspaceFolder(src.doc.uri))) return provider.setProjectFiles([]);
+    const work = () => projectMarks.collect(src.doc.uri).catch(() => []);
     const files = visible
-      ? await vscode.window.withProgress({ location: { viewId: VIEW_ID }, title: t('Looking for marks in the project…') }, () => work())
+      ? await vscode.window.withProgress({ location: { viewId: VIEW_ID }, title: t('Looking for marks in the project…') }, work)
       : await work();
     if (run === projectRun && provider.source === src) provider.setProjectFiles(files);
   };
@@ -1855,7 +1852,7 @@ function activate(context) {
     }
   };
 
-  // --- marks: status and star -----------------------------------------------------------
+  // --- marks: status and pin -----------------------------------------------------------
 
   /**
    * Write a mark change to the project's marks file (see MarksFile), then
@@ -2000,8 +1997,10 @@ function activate(context) {
     refreshProjectSoon();
   };
   // Documents created, saved or changed on disk (also by git or another
-  // editor): read the project's marks again.
+  // editor): read the project's marks again. Saving the current document
+  // does not count: its marks are read from the editor.
   const docsWatcher = vscode.workspace.createFileSystemWatcher('**/*.{ipynb,md}');
+  const onDocFileChange = (uri) => isSourceUri(uri) || refreshProjectSoon();
 
   context.subscriptions.push(
     view,
@@ -2059,9 +2058,9 @@ function activate(context) {
     }),
     vscode.workspace.onDidDeleteFiles((e) => marksFile.forget(e.files).catch(() => {})),
     docsWatcher,
-    docsWatcher.onDidChange(() => refreshProjectSoon()),
-    docsWatcher.onDidCreate(() => refreshProjectSoon()),
-    docsWatcher.onDidDelete(() => refreshProjectSoon()),
+    docsWatcher.onDidChange(onDocFileChange),
+    docsWatcher.onDidCreate(onDocFileChange),
+    docsWatcher.onDidDelete(onDocFileChange),
     marksWatcher,
     marksWatcher.onDidChange(onMarksFileChange),
     marksWatcher.onDidCreate(onMarksFileChange),

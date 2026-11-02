@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.10.1 — 2026-11-02
+
+**Fixed**
+
+- The background search for the badge no longer reads online-only files of
+  a cloud drive (which would download them), and no longer searches the
+  folder of a document outside the workspace folders (only the bookmark
+  button does). Saving the current document no longer starts a new search.
+
 ## 1.10.0 — 2026-11-02
 
 **New**
