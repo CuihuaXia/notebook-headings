@@ -1144,7 +1144,10 @@ class HeadingsProvider {
     // Headings of other documents (Show Marked Headings) get no menu: the
     // commands act on the current document; clicking opens theirs.
     const other = this.markedOnly && node.fileNode && !node.fileNode.current;
-    item.contextValue = other ? 'projectHeading' : node.star ? 'heading.pinned' : 'heading';
+    // ".status" only for a status that was set: one that comes from a
+    // to-check marker in the text cannot be cleared.
+    const stored = node.status && !node.autoStatus ? '.status' : '';
+    item.contextValue = other ? 'projectHeading' : `heading${node.star ? '.pinned' : ''}${stored}`;
 
     const kind = this.markedOnly && node.fileNode ? node.fileNode.kind : this.source && this.source.kind;
     const notebook = kind === 'notebook';
@@ -1903,23 +1906,68 @@ function activate(context) {
   const headingsText = (nodes) =>
     nodes.length === 1 ? `"${truncate(nodes[0].text, 40)}"` : t('{0} headings', nodes.length);
 
-  /** "Set Status…": TODO, In progress, To check, Finished, or clear. */
-  const setStatus = async (node, selected) => {
-    const src = provider.source;
-    const nodes = targetsOf(node, selected);
-    if (!src || !nodes.length) return;
+  /**
+   * The list of statuses for `nodes`; `withClear` adds Clear Status (for the
+   * cell toolbar button, which has no right-click menu).
+   */
+  const pickStatus = async (nodes, withClear) => {
     const same = nodes.every((n) => n.status === nodes[0].status) ? nodes[0].status : undefined;
     const items = STATUSES.map((st) => ({
       label: `$(${st.icon}) ${t(st.label)}`,
       description: st.id === same ? t('current') : '',
       id: st.id,
     }));
-    items.push({ label: `$(close) ${t('Clear Status')}`, description: '', id: null });
+    if (withClear) items.push({ label: `$(close) ${t('Clear Status')}`, description: '', id: null });
     const pick = await vscode.window.showQuickPick(items, { placeHolder: t('Status of {0}', headingsText(nodes)) });
     if (!pick) return;
-    if (!(await setMarks(nodes, { status: pick.id }))) return;
+    if (pick.id === null) await clearStatuses(nodes);
+    else await setMarks(nodes, { status: pick.id });
+  };
+
+  /** "Set Status…": TODO, In progress, To check or Finished. */
+  const setStatus = async (node, selected) => {
+    const nodes = targetsOf(node, selected);
+    if (provider.source && nodes.length) await pickStatus(nodes, false);
+  };
+
+  /** "Clear Status" (shown only on headings with a status that was set). */
+  const clearStatus = async (node, selected) => {
+    const nodes = targetsOf(node, selected);
+    if (provider.source && nodes.length) await clearStatuses(nodes);
+  };
+
+  /**
+   * "Set Status…" in a Markdown cell's toolbar: the statuses of the cell's
+   * heading (first asking which one when the cell has several). VS Code
+   * passes the cell; from elsewhere, the active cell is used.
+   */
+  const cellStatus = async (cell) => {
+    const src = provider.source;
+    const editor = vscode.window.activeNotebookEditor;
+    if (!cell || typeof cell.index !== 'number') cell = editor && editor.notebook.cellAt(editor.selection.start);
+    if (!src || !cell || src.doc !== cell.notebook) return;
+    const nodes = provider.flat.filter((n) => n.pos === cell.index);
+    if (!nodes.length) {
+      vscode.window.showInformationMessage(t('Notebook Headings: this cell has no heading.'));
+      return;
+    }
+    let node = nodes[0];
+    if (nodes.length > 1) {
+      const pick = await vscode.window.showQuickPick(
+        nodes.map((n) => ({ label: label(n), node: n })),
+        { placeHolder: t('Which heading?') }
+      );
+      if (!pick) return;
+      node = pick.node;
+    }
+    await pickStatus([node], true);
+  };
+
+  /** Remove the status of `nodes`; a to-check marker in the text stays. */
+  const clearStatuses = async (nodes) => {
+    if (!(await setMarks(nodes, { status: null }))) return;
     const after = nodes.map((n) => provider.byId.get(n.id)).filter(Boolean);
-    if (pick.id === null && after.some((n) => n.autoStatus)) {
+    if (after.some((n) => n.autoStatus)) {
       vscode.window.showInformationMessage(
         t('Notebook Headings: a heading whose text contains a to-check marker (such as ???) still shows as To check. Remove the marker from the text, or set another status.')
       );
@@ -2060,6 +2108,8 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.copyContent', copyContent),
     vscode.commands.registerCommand('notebookHeadings.clearOutputs', clearOutputs),
     vscode.commands.registerCommand('notebookHeadings.setStatus', setStatus),
+    vscode.commands.registerCommand('notebookHeadings.clearStatus', clearStatus),
+    vscode.commands.registerCommand('notebookHeadings.cellStatus', cellStatus),
     vscode.commands.registerCommand('notebookHeadings.addStar', setPin(true)),
     vscode.commands.registerCommand('notebookHeadings.removeStar', setPin(false)),
     vscode.commands.registerCommand('notebookHeadings.showMarked', showMarked),

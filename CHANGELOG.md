@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.10.0 — 2026-11-02
+
+**New**
+
+- **Set Status…** in the toolbar of Markdown cells: set or clear the status
+  of the cell's heading without going to the tree.
+
+**Changed**
+
+- **Clear Status** is now its own item in a heading's right-click menu,
+  shown only when the heading has a status you set; Set Status… lists the
+  four statuses only.
+- The README opens with a short animated tour and has a picture for each
+  main feature.
+
 ## 1.9.0 — 2026-10-11
 
 **New**

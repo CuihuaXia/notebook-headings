@@ -71,6 +71,69 @@ const tests = [
     },
   ],
   [
+    'Clear Status is offered only on headings with a status that was set, and clears it',
+    async () => {
+      await openMarkdown('sample.md');
+      const ctx = (text) => provider().getTreeItem(node(text)).contextValue;
+      try {
+        assert.equal(ctx('Setup'), 'heading');
+        await api.setMarks([node('Setup')], { status: 'todo', star: true });
+        assert.equal(ctx('Setup'), 'heading.pinned.status');
+        await vscode.commands.executeCommand('notebookHeadings.clearStatus', node('Setup'));
+        assert.equal(node('Setup').status, undefined);
+        assert.equal(ctx('Setup'), 'heading.pinned', 'the pin stays');
+        // A to-check marker in the text is not a status that can be cleared.
+        const doc = vscode.window.activeTextEditor.document;
+        const line = doc.lineAt(node('Analysis').pos);
+        const edit = new vscode.WorkspaceEdit();
+        edit.insert(doc.uri, line.range.end, ' ???');
+        await vscode.workspace.applyEdit(edit);
+        await until(() => node('Analysis ???'), 'the edited heading');
+        assert.equal(node('Analysis ???').status, 'question');
+        assert.equal(ctx('Analysis ???'), 'heading');
+      } finally {
+        await api.setMarks([node('Setup')], { star: false });
+        await vscode.commands.executeCommand('workbench.action.files.revert');
+      }
+    },
+  ],
+  [
+    'Notebook: Set Status… in a Markdown cell\'s toolbar sets or clears its heading\'s status',
+    async () => {
+      const nb = await openNotebook('sample.ipynb');
+      const pickQuick = vscode.window.showQuickPick;
+      const info = vscode.window.showInformationMessage;
+      const offered = [];
+      const messages = [];
+      try {
+        // Means and Summary share a cell: first choose the heading, then the status.
+        vscode.window.showQuickPick = async (list) => {
+          offered.push(list.map((i) => i.id));
+          return list[0].node ? list.find((i) => i.node.text === 'Means') : list.find((i) => i.id === 'doing');
+        };
+        await vscode.commands.executeCommand('notebookHeadings.cellStatus', nb.cellAt(node('Means').pos));
+        assert.equal(node('Means').status, 'doing');
+        assert.deepEqual(offered[1], ['todo', 'doing', 'question', 'done', null], 'with Clear Status');
+        vscode.window.showQuickPick = async (list) => (list[0].node ? list.find((i) => i.node.text === 'Means') : list.find((i) => i.id === null));
+        await vscode.commands.executeCommand('notebookHeadings.cellStatus', nb.cellAt(node('Means').pos));
+        assert.equal(node('Means').status, undefined);
+        // The tree's Set Status… has no Clear Status (the menu has it).
+        vscode.window.showQuickPick = async (list) => (offered.push(list.map((i) => i.id)), undefined);
+        await vscode.commands.executeCommand('notebookHeadings.setStatus', node('Means'));
+        assert.deepEqual(offered[offered.length - 1], ['todo', 'doing', 'question', 'done']);
+        // A cell without a heading says so.
+        vscode.window.showInformationMessage = async (m) => (messages.push(m), undefined);
+        const plain = nb.getCells().find((c) => !provider().flat.some((n) => n.pos === c.index));
+        await vscode.commands.executeCommand('notebookHeadings.cellStatus', plain);
+        assert.match(messages[0], /no heading/);
+      } finally {
+        vscode.window.showQuickPick = pickQuick;
+        vscode.window.showInformationMessage = info;
+        await api.setMarks([node('Means')], { status: null });
+      }
+    },
+  ],
+  [
     'Markdown: marks are saved in .vscode/notebook-headings.json and follow their heading',
     async () => {
       const doc = await openMarkdown('sample.md');

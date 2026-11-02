@@ -92,8 +92,11 @@ outputs, every status, pins and cell tags. In VS Code, choose the
 **Screenshots (no other extensions)** launch configuration and press `F5`;
 the window opens the showcase with only this extension loaded, so no other
 extension's decorations or status bar items get into the picture. Size the
-window to about 1600×1000, take the screenshots, and save them over
-`media/screenshots/notebook.png` and `markdown.png`.
+window to about 1600×1000, take the screenshots, and save them over the
+files in `media/screenshots/`: `tour.gif` (a short tour built from a few
+captures), `markdown.png`, and one picture per feature (`filter.png`,
+`tags.png`, `cell-status.png`, `project-marks.png`). Keep them small and
+without metadata.
 
 ## Project layout
 

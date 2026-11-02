@@ -29,6 +29,7 @@
   "command.editSectionTags": "编辑本节标签…",
   "command.copyReference": "复制本节引用",
   "command.setStatus": "设置状态…",
+  "command.clearStatus": "清除状态",
   "command.addStar": "置顶",
   "command.removeStar": "取消置顶",
   "command.showMarked": "显示有标记的标题",

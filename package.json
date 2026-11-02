@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -149,6 +149,16 @@
         "icon": "$(tasklist)"
       },
       {
+        "command": "notebookHeadings.clearStatus",
+        "title": "%command.clearStatus%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "notebookHeadings.cellStatus",
+        "title": "%command.setStatus%",
+        "icon": "$(tasklist)"
+      },
+      {
         "command": "notebookHeadings.addStar",
         "title": "%command.addStar%",
         "icon": "$(pinned)"
@@ -235,6 +245,14 @@
           "when": "false"
         },
         {
+          "command": "notebookHeadings.clearStatus",
+          "when": "false"
+        },
+        {
+          "command": "notebookHeadings.cellStatus",
+          "when": "false"
+        },
+        {
           "command": "notebookHeadings.addStar",
           "when": "false"
         },
@@ -258,14 +276,19 @@
           "group": "0_mark@1"
         },
         {
-          "command": "notebookHeadings.addStar",
-          "when": "view == notebookHeadings.view && viewItem == heading",
+          "command": "notebookHeadings.clearStatus",
+          "when": "view == notebookHeadings.view && viewItem =~ /^heading.*\\.status$/",
           "group": "0_mark@2"
         },
         {
+          "command": "notebookHeadings.addStar",
+          "when": "view == notebookHeadings.view && viewItem =~ /^heading(\\.status)?$/",
+          "group": "0_mark@3"
+        },
+        {
           "command": "notebookHeadings.removeStar",
-          "when": "view == notebookHeadings.view && viewItem == heading.pinned",
-          "group": "0_mark@2"
+          "when": "view == notebookHeadings.view && viewItem =~ /^heading\\.pinned/",
+          "group": "0_mark@3"
         },
         {
           "command": "notebookHeadings.selectSection",
@@ -296,6 +319,13 @@
           "command": "notebookHeadings.clearOutputs",
           "when": "view == notebookHeadings.view && viewItem =~ /^heading/ && notebookHeadings.isNotebook",
           "group": "2_outputs@1"
+        }
+      ],
+      "notebook/cell/title": [
+        {
+          "command": "notebookHeadings.cellStatus",
+          "when": "notebookType == 'jupyter-notebook' && notebookCellType == markup",
+          "group": "inline/cell@1"
         }
       ]
     },

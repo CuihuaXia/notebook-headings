@@ -10,7 +10,7 @@ notebook with 1,000+ headings. Notebook Headings keeps all six heading levels
 but opens the tree expanded only to the level you choose (default: `##`), so
 you see the structure first and drill down on demand.
 
-<img src="media/screenshots/notebook.png" alt="Notebook Headings view for a Jupyter notebook: a Pinned group, numbered and color-coded headings with status icons, cell counts, output sizes and mark summaries, and the right-click menu" width="800">
+<img src="media/screenshots/tour.gif" alt="A short tour: the view opens collapsed, a click jumps to a section, a status is set from the right-click menu, the bookmark button lists the marked headings of every file in the project, and the filter narrows the tree as you type" width="800">
 
 ## Quick start
 
@@ -40,6 +40,7 @@ you see the structure first and drill down on demand.
   open the view.
 - **Filter** (`Cmd+Alt+F` / `Ctrl+Alt+F` in the view): live search with match
   highlighting; matches keep their parent headings visible.
+  <br><img src="media/screenshots/filter.png" alt="Filtering the headings for model: only the matching headings and their parents stay" width="600">
 - **Go to Heading** (`Cmd+Alt+O` / `Ctrl+Alt+O` in a notebook or Markdown
   editor): a searchable list of all headings.
 - **Select whole sections** (right-click → **Select Section**): selects the
@@ -59,10 +60,13 @@ you see the structure first and drill down on demand.
   cell behind a click-to-show toggle in Jupyter Book / MyST pages:
   `hide-output`, `hide-input` and `hide-cell`. Any other tag can be typed in.
   Tags are stored where Jupyter, Jupyter Book and nbconvert read them.
+  <br><img src="media/screenshots/tags.png" alt="The Tags checklist of a code cell with hide-output checked" width="600">
 - **Status marks.** Right-click a heading → **Set Status…** to mark it TODO,
   In progress, To check or Finished; its level shape turns into a filled,
   colored status icon. Headings containing `???` count as To check
-  automatically.
+  automatically. In a notebook, the toolbar that appears over a Markdown
+  cell also has **Set Status…** for the cell's heading, with Clear Status.
+  <br><img src="media/screenshots/cell-status.png" alt="The status list opened from the toolbar of a Markdown cell, with Clear Status" width="600">
 - **Pin to top.** **Pin to Top** puts a gold pin icon before a heading and
   lists it in a **Pinned** group at the top of the view, one click away.
 - **Marks stay visible when collapsed.** Every parent sums up the marks below
@@ -71,6 +75,7 @@ you see the structure first and drill down on demand.
   document in the project, by file.
   Marks are kept in the project, not in your documents, so they follow you
   to another computer.
+  <br><img src="media/screenshots/project-marks.png" alt="The bookmark view: the marked headings of a notebook and a Markdown file, each under its file name, and a badge counting the headings still to do or to check" width="400">
 - **Clear a section's outputs** (right-click → **Clear Section Outputs…**):
   the output sizes show which sections make a notebook large; clear them in
   one step, after a confirmation, and undo with `Cmd+Z` if needed.
@@ -154,9 +159,10 @@ View toolbar, left to right:
 
 Right-click a heading for:
 
-- **Set Status…**: TODO, In progress, To check, Finished, or Clear
-  Status. A heading whose text contains `???` counts as To check until you
-  set another status or remove the `???`.
+- **Set Status…**: TODO, In progress, To check or Finished. A heading
+  whose text contains `???` counts as To check until you set another status
+  or remove the `???`.
+- **Clear Status**: shown on headings with a status you set.
 - **Pin to Top** / **Unpin**: pinned headings are listed in the **Pinned**
   group at the top of the view; click one to jump there.
 - **Select Section**: selects every cell (notebook) or line (Markdown) of the
@@ -183,8 +189,8 @@ Right-click a heading for:
   the sections worth clearing.
 
 Select several headings with `Cmd`/`Ctrl`-click or `Shift`-click, then
-right-click one of them: **Set Status…** and the pin commands mark all of
-them, **Clear Section Outputs…** clears all of them, **Select Section** selects all their sections at once (nested or
+right-click one of them: **Set Status…**, **Clear Status** and the pin
+commands mark all of them, **Clear Section Outputs…** clears all of them, **Select Section** selects all their sections at once (nested or
 adjacent sections are merged, so no cell is selected twice), **Edit Section
 Tags…** tags the code cells of all of them, and the copy commands copy one
 line per heading (Copy Section Content: one block of text), in document

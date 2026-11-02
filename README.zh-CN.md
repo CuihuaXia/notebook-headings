@@ -6,7 +6,7 @@
 
 VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法看。这个扩展保留全部六级标题，但打开时只展开到你设定的层级（默认到 `##`），先看整体结构，需要时再逐级展开。
 
-<img src="media/screenshots/notebook.png" alt="Jupyter notebook 的 Notebook Headings 目录：置顶分组、带编号和分级颜色的标题、状态图标、cell 数、输出大小、标记汇总，以及右键菜单" width="800">
+<img src="media/screenshots/tour.gif" alt="功能演示：目录打开时折叠，点标题跳到对应小节，右键设置状态，书签按钮按文件列出整个项目里有标记的标题，搜索框边输入边过滤" width="800">
 
 ## 快速上手
 
@@ -22,15 +22,15 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **小节 cell 数和输出大小**：notebook 中每个标题右侧的灰色文字显示该小节包含的 cell 数和输出总大小，例如 `34 · 2.1 MB`，方便找出让 notebook 变大或渲染变慢的小节。
 - **跟随当前位置**：在文档里点击或滚动时，目录自动高亮当前小节；不会自动展开你折叠起来的部分。
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
-- **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。
+- **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。<br><img src="media/screenshots/filter.png" alt="搜索 model：只留下匹配的标题和它们的上级标题" width="600">
 - **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
 - **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。
 - **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
-- **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。
-- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色实心的状态图标。标题里带 `???` 的自动算作"待核对"。
+- **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。<br><img src="media/screenshots/tags.png" alt="代码 cell 的标签勾选列表，勾选了 hide-output" width="600">
+- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色实心的状态图标。标题里带 `???` 的自动算作"待核对"。在 notebook 里，鼠标移到 Markdown cell 上时出现的工具条里也有**设置状态**按钮，可以设置或清除这个 cell 里标题的状态。<br><img src="media/screenshots/cell-status.png" alt="从 Markdown cell 工具条打开的状态列表，包含清除状态" width="600">
 - **置顶**：**Pin to Top**（置顶）在标题前显示金色图钉图标，并把标题列到目录顶部的"已置顶"分组里，点一下就能跳过去。
-- **折叠起来也看得到标记**：每个上级标题会汇总它下面的标记，例如 `○2 ➤1 ✓3 ⤒2`（○ 待做、➤ 进行中、? 待核对、✓ 已完成、⤒ 置顶）；书签按钮按文件列出整个项目里有标记的小节。标记保存在项目里而不是你的文档里，换电脑也能接着用。
+- **折叠起来也看得到标记**：每个上级标题会汇总它下面的标记，例如 `○2 ➤1 ✓3 ⤒2`（○ 待做、➤ 进行中、? 待核对、✓ 已完成、⤒ 置顶）；书签按钮按文件列出整个项目里有标记的小节。标记保存在项目里而不是你的文档里，换电脑也能接着用。<br><img src="media/screenshots/project-marks.png" alt="书签视图：一个 notebook 和一个 Markdown 文件里有标记的标题，各自列在文件名下面；活动栏图标上的数字是还待做或待核对的标题数" width="400">
 - **清除小节输出**（右键 → **Clear Section Outputs…**）：目录里的输出大小能看出是哪些小节让 notebook 变大，确认后一步清除，需要时用 `Cmd+Z` 恢复。
 - **安全**：从不改动你的代码和文字，只在你明确要求时修改 notebook：设置 cell 的标签（cell 元数据），或在你确认后清除某一节的输出，都可以用 `Cmd+Z` 撤销。标记完全不碰你的文档。
 
@@ -93,7 +93,8 @@ code --install-extension releases/notebook-headings-<version>.vsix
 
 在标题上**右键**：
 
-- **Set Status…**（设置状态）：待做、进行中、待核对、已完成，或清除状态。标题文字里带 `???` 的算作"待核对"，直到你设置了别的状态或删掉 `???`。
+- **Set Status…**（设置状态）：待做、进行中、待核对或已完成。标题文字里带 `???` 的算作"待核对"，直到你设置了别的状态或删掉 `???`。
+- **Clear Status**（清除状态）：只在你设置过状态的标题上出现。
 - **Pin to Top / Unpin**（置顶 / 取消置顶）：置顶的标题列在目录顶部的"已置顶"分组里，点一下就跳过去。
 - **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
 - **Edit Section Tags…**（编辑本节标签，仅 notebook）：为这一节（包括所有子小节）的所有代码 cell 打开标签勾选列表，比如一次给整个分析小节加上 `hide-output`。标题和文字 cell 不受影响，网页上这一节仍然可读。
@@ -102,7 +103,7 @@ code --install-extension releases/notebook-headings-<version>.vsix
 - **Copy Section Content**（复制本节内容）：把这一节所有 cell（或所有行）复制成纯文本，代码 cell 用带语言的 ```` ``` ```` 代码块包起来。
 - **Clear Section Outputs…**（清除本节输出，仅 notebook）：清除这一节（包括所有子小节）所有代码 cell 的输出。执行前会弹窗确认，并写明涉及多少个 cell、多大的输出。代码、标签和运行编号都会保留，`Cmd+Z` 可以恢复输出。可以先看目录里的输出大小，找出值得清理的小节。
 
-用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，再在其中一个上右键：设置状态和置顶会作用于所有选中的标题；**Clear Section Outputs…** 会清除所有这些小节的输出；**Select Section** 会一次选中这些小节的所有 cell（嵌套或相邻的小节会自动合并，不会重复选中）；**Edit Section Tags…** 会给这些小节的所有代码 cell 设置标签；复制命令按文档顺序每个标题复制一行（复制本节内容则合成一段文字）。
+用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，再在其中一个上右键：设置状态、清除状态和置顶会作用于所有选中的标题；**Clear Section Outputs…** 会清除所有这些小节的输出；**Select Section** 会一次选中这些小节的所有 cell（嵌套或相邻的小节会自动合并，不会重复选中）；**Edit Section Tags…** 会给这些小节的所有代码 cell 设置标签；复制命令按文档顺序每个标题复制一行（复制本节内容则合成一段文字）。
 
 给 cell 设置标签：点击 cell 右下角的 **Tags**（已有标签时显示数量），勾选或取消标签，或者输入新标签，然后按 Enter。输入的文字会先用来筛选列表（比如输入 `hide` 会筛出 `hide-input`、`hide-output` 等）；只有匹配不到任何已有标签时，才会作为新标签添加。命令面板里的 **Notebook Headings：编辑 cell 标签…** 对当前选中的 cell 做同样的事。Markdown cell 只有已经有标签时才显示这个按钮。
 

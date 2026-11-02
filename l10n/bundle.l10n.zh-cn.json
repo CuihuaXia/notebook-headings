@@ -46,7 +46,6 @@
   "Copied {0}": "已复制 {0}",
   "{0} headings": "{0} 个标题",
   "current": "当前",
-  "Clear Status": "清除状态",
   "Status of {0}": "设置 {0} 的状态",
   "TODO": "待做",
   "In progress": "进行中",
@@ -86,5 +85,8 @@
   "1 heading to do or to check in this project": "这个项目里有 1 个待做或待核对的标题",
   "{0} headings to do or to check in this project": "这个项目里有 {0} 个待做或待核对的标题",
   "Notebook Headings: could not open {0} ({1}).": "Notebook Headings：无法打开 {0}（{1}）。",
-  "Notebook Headings: open a notebook or Markdown file first.": "Notebook Headings：请先打开一个 notebook 或 Markdown 文件。"
+  "Notebook Headings: open a notebook or Markdown file first.": "Notebook Headings：请先打开一个 notebook 或 Markdown 文件。",
+  "Clear Status": "清除状态",
+  "Notebook Headings: this cell has no heading.": "Notebook Headings：这个 cell 里没有标题。",
+  "Which heading?": "哪个标题？"
 }

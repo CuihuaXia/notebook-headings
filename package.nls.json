@@ -29,6 +29,7 @@
   "command.editSectionTags": "Edit Section Tags…",
   "command.copyReference": "Copy Section Reference",
   "command.setStatus": "Set Status…",
+  "command.clearStatus": "Clear Status",
   "command.addStar": "Pin to Top",
   "command.removeStar": "Unpin",
   "command.showMarked": "Show Marked Headings",
