@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -183,6 +183,15 @@
         "icon": "$(clear-all)"
       }
     ],
+    "icons": {
+      "notebook-headings-square": {
+        "description": "%icon.square%",
+        "default": {
+          "fontPath": "./media/level-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
     "menus": {
       "view/title": [
         {

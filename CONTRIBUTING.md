@@ -80,6 +80,11 @@ through the `__test` object returned by `activate()`, which is not an API.
 - The status and pin icons in `media/status/` are generated from the colors
   in `src/marks.js` by `scripts/status-icons.js`. After changing a color or a
   glyph, run `npm run icons`; `npm test` checks that the files match.
+- Level shapes are VS Code's own icons, except the filled square, which
+  they lack: it is a glyph in `media/level-icons.woff`,
+  registered under `contributes.icons` in `package.json` and built by
+  `python3 scripts/level-icons.py` (needs fontTools; run it only to change
+  the shape).
 - README images and links use relative paths. When the extension is packaged,
   `vsce` rewrites them to `https://github.com/CuihuaXia/notebook-headings/…`
   URLs, because VS Code's extension details page only loads `https:` images.
@@ -118,9 +123,11 @@ notebook-headings/
 ├── media/
 │   ├── headings.svg      activity bar icon
 │   ├── icon.png          extension icon (Extensions view / Marketplace)
+│   ├── level-icons.woff  level shapes VS Code's icon font lacks (generated)
 │   ├── status/           status and pin icons (generated, see scripts/)
 │   └── screenshots/      README screenshots (not packaged in the .vsix)
 ├── scripts/
+│   ├── level-icons.py    generates media/level-icons.woff
 │   └── status-icons.js   generates media/status/ (`npm run icons`)
 ├── releases/             built .vsix packages
 ├── .vscode/launch.json   F5 launch configurations (development, screenshots)

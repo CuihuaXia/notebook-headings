@@ -27,8 +27,8 @@ you see the structure first and drill down on demand.
   time.
 - **Outline numbers** (`1`, `1.2`, `1.2.3`). A single `#` title is left
   unnumbered so the sections start at 1. Toggle from the view toolbar.
-- **Level colors and shapes.** `##` red ●, `###` orange ○, `####` blue ■,
-  `#####` purple ▲, `######` olive •, with separate light and dark theme
+- **Level colors and shapes.** `##` red ●, `###` orange ◆, `####` blue ■,
+  `#####` purple ▲, `######` olive ⬢, with separate light and dark theme
   colors. Every color can be overridden.
 - **Cell counts and output sizes.** For notebooks, the grey text after a
   heading shows how many cells the section has and how much output they store,
@@ -62,8 +62,8 @@ you see the structure first and drill down on demand.
   Tags are stored where Jupyter, Jupyter Book and nbconvert read them.
   <br><img src="media/screenshots/tags.png" alt="The Tags checklist of a code cell with hide-output checked" width="600">
 - **Status marks.** Right-click a heading → **Set Status…** to mark it TODO,
-  In progress, To check or Finished; its level shape turns into a filled,
-  colored status icon. Headings containing `???` count as To check
+  In progress, To check or Finished; a colored status icon replaces its
+  level shape. Headings containing `???` count as To check
   automatically. In a notebook, the toolbar that appears over a Markdown
   cell also has **Set Status…** for the cell's heading, with Clear Status.
   <br><img src="media/screenshots/cell-status.png" alt="The status list opened from the toolbar of a Markdown cell, with Clear Status" width="600">

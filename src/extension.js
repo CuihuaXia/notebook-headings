@@ -81,16 +81,21 @@ const DECO_SCHEME = 'notebook-heading';
  * Codicon shown before a heading, by color rank (index 0 = page title).
  * Once labels are colored the icon slot is always occupied (otherwise VS Code
  * shows a file-type icon there), so it carries the level as a shape:
- * heavier shapes for shallower levels.
+ * a different filled shape per level (filled, like the status icons):
+ * circle, diamond, square, triangle, hexagon — ordered so that neighbouring
+ * levels look clearly different (a hexagon next to the circle did not).
+ * Codicons have no filled square, so that one comes from
+ * media/level-icons.woff (scripts/level-icons.py; `contributes.icons` in
+ * package.json).
  */
 const RANK_ICONS = [
   'book', // page title
   'circle-filled', // rank 1, usually ##
-  'circle-outline', // rank 2, usually ###
-  'primitive-square', // rank 3, usually ####
+  'debug-breakpoint-log', // rank 2, usually ### (filled diamond)
+  'notebook-headings-square', // rank 3, usually #### (filled square)
   'debug-breakpoint-function', // rank 4, usually ##### (filled triangle)
-  'circle-small-filled', // rank 5, usually ######
-  'circle-small', // rank 6, fallback
+  'debug-breakpoint-data', // rank 5, usually ###### (filled hexagon)
+  'debug-breakpoint-data', // rank 6, fallback
 ];
 
 /** Folder of the status icons (media/status/<id>.svg); set in activate(). */
@@ -1936,13 +1941,21 @@ function activate(context) {
   /**
    * "Set Status…" in a Markdown cell's toolbar: the statuses of the cell's
    * heading (first asking which one when the cell has several). VS Code
-   * passes the cell; from elsewhere, the active cell is used.
+   * passes the cell; from elsewhere, the active cell is used. A cell of
+   * another visible notebook (side by side) first makes that notebook the
+   * active one, and so the tree's document.
    */
   const cellStatus = async (cell) => {
-    const src = provider.source;
     const editor = vscode.window.activeNotebookEditor;
     if (!cell || typeof cell.index !== 'number') cell = editor && editor.notebook.cellAt(editor.selection.start);
-    if (!src || !cell || src.doc !== cell.notebook) return;
+    if (!cell) return;
+    if (!isSourceDoc(cell.notebook)) {
+      const other = vscode.window.visibleNotebookEditors.find((e) => e.notebook === cell.notebook);
+      if (!other) return;
+      await vscode.window.showNotebookDocument(cell.notebook, { viewColumn: other.viewColumn });
+      track();
+      if (!isSourceDoc(cell.notebook)) return;
+    }
     const nodes = provider.flat.filter((n) => n.pos === cell.index);
     if (!nodes.length) {
       vscode.window.showInformationMessage(t('Notebook Headings: this cell has no heading.'));

@@ -57,6 +57,21 @@ const tests = [
     },
   ],
   [
+    'Each level has its own filled shape; the square comes from the bundled icon font',
+    async () => {
+      await openMarkdown('sample.md');
+      const icon = (text) => provider().getTreeItem(node(text)).iconPath.id;
+      const shapes = ['Setup', 'Install packages', 'Check missing values', 'Per-column summary', 'Raw counts'].map(icon);
+      assert.deepEqual(shapes, ['circle-filled', 'debug-breakpoint-log', 'notebook-headings-square', 'debug-breakpoint-function', 'debug-breakpoint-data']);
+      // The custom icons are declared in package.json and their font is shipped.
+      const ext = vscode.extensions.getExtension('cuihuaxia.notebook-headings');
+      for (const id of shapes.filter((s) => s.startsWith('notebook-headings-'))) {
+        const declared = ext.packageJSON.contributes.icons[id];
+        assert.ok(declared && fs.existsSync(path.join(ext.extensionPath, declared.default.fontPath)), id);
+      }
+    },
+  ],
+  [
     'Markdown: turning the markdown setting off clears the tree',
     async () => {
       await openMarkdown('sample.md');
@@ -130,6 +145,31 @@ const tests = [
         vscode.window.showQuickPick = pickQuick;
         vscode.window.showInformationMessage = info;
         await api.setMarks([node('Means')], { status: null });
+      }
+    },
+  ],
+  [
+    'Notebook: Set Status… in a cell of another visible notebook makes that notebook current first',
+    async () => {
+      const first = await vscode.workspace.openNotebookDocument(file('showcase.ipynb'));
+      await vscode.window.showNotebookDocument(first, { viewColumn: vscode.ViewColumn.One });
+      const second = await vscode.workspace.openNotebookDocument(file('sample.ipynb'));
+      await vscode.window.showNotebookDocument(second, { viewColumn: vscode.ViewColumn.Two });
+      await until(() => provider().source && provider().source.doc === second, 'the second notebook in the tree');
+      const pickQuick = vscode.window.showQuickPick;
+      try {
+        // A cell of the first notebook, which is visible but not the tree's document.
+        const cell = first.getCells().find((c) => c.kind === vscode.NotebookCellKind.Markup && c.document.getText().includes('By year built'));
+        vscode.window.showQuickPick = async (list) => list.find((i) => i.id === 'doing');
+        await vscode.commands.executeCommand('notebookHeadings.cellStatus', cell);
+        assert.equal(provider().source.doc, first, 'the tree switched to the clicked cell\'s notebook');
+        assert.equal(node('By year built').status, 'doing');
+      } finally {
+        vscode.window.showQuickPick = pickQuick;
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await openNotebook('showcase.ipynb');
+        if (node('By year built').status) await api.setMarks([node('By year built')], { status: null });
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       }
     },
   ],

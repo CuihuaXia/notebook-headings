@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.10.2 — 2026-11-10
+
+**Changed**
+
+- Level shapes are all filled now and about the same size:
+  `##` ●, `###` ◆, `####` ■, `#####` ▲, `######` ⬢. The hollow square of
+  `####` looked like a missing-character box, and the dot of `######` was
+  much smaller than the other shapes.
+
+**Fixed**
+
+- With two notebooks side by side, **Set Status…** in a cell's toolbar did
+  nothing for the notebook the view was not showing; the view now switches
+  to that notebook first.
+
 ## 1.10.1 — 2026-11-02
 
 **Fixed**

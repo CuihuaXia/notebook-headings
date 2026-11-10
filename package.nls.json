@@ -28,6 +28,7 @@
   "config.cellTagButton": "Show a Tags button at the bottom right of code cells (and of Markdown cells that already have tags). Clicking it opens a checklist of the collapse tags (hide-output, hide-input, hide-cell) to set the cell's tags; this edits only the tags in the cell metadata and can be undone.",
   "command.editSectionTags": "Edit Section Tags…",
   "command.copyReference": "Copy Section Reference",
+  "icon.square": "Notebook Headings: filled square, the shape of one heading level",
   "command.setStatus": "Set Status…",
   "command.clearStatus": "Clear Status",
   "command.addStar": "Pin to Top",

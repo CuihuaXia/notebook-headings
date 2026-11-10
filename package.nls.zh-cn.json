@@ -28,6 +28,7 @@
   "config.cellTagButton": "在代码 cell（以及已有标签的 Markdown cell）右下角显示\"Tags\"按钮。点击后弹出折叠标签（hide-output、hide-input、hide-cell）的勾选列表，用来设置这个 cell 的标签；只修改 cell 元数据里的标签，可以撤销。",
   "command.editSectionTags": "编辑本节标签…",
   "command.copyReference": "复制本节引用",
+  "icon.square": "Notebook Headings：实心方块，某一级标题的形状",
   "command.setStatus": "设置状态…",
   "command.clearStatus": "清除状态",
   "command.addStar": "置顶",
