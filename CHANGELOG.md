@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.10.3 — 2026-11-10
+
+**Fixed**
+
+- The square of `####` headings sat a few pixels too far left, leaving a
+  wider gap before the heading text than the other shapes.
+
+**Changed**
+
+- README: sharper pictures, and new ones for Go to Heading and Select
+  Section.
+
 ## 1.10.2 — 2026-11-10
 
 **Changed**

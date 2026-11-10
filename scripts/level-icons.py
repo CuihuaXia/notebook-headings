@@ -53,7 +53,9 @@ fb = FontBuilder(EM, isTTF=True)
 fb.setupGlyphOrder(list(glyphs))
 fb.setupCharacterMap({0xE001: 'square'})
 fb.setupGlyf(glyphs)
-fb.setupHorizontalMetrics({name: (EM, 0) for name in glyphs})
+# The left side bearing must be the outline's left edge: with 0, VS Code
+# (unlike some renderers) draws the glyph shifted left by that much.
+fb.setupHorizontalMetrics({name: (EM, getattr(fb.font['glyf'][name], 'xMin', 0)) for name in glyphs})
 fb.setupHorizontalHeader(ascent=EM, descent=0)
 fb.setupNameTable({'familyName': 'notebook-headings-levels', 'styleName': 'Regular'})
 fb.setupOS2(sTypoAscender=EM, sTypoDescender=0, usWinAscent=EM, usWinDescent=0)

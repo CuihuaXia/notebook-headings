@@ -43,11 +43,13 @@ you see the structure first and drill down on demand.
   <br><img src="media/screenshots/filter.png" alt="Filtering the headings for model: only the matching headings and their parents stay" width="600">
 - **Go to Heading** (`Cmd+Alt+O` / `Ctrl+Alt+O` in a notebook or Markdown
   editor): a searchable list of all headings.
+  <br><img src="media/screenshots/go-to-heading.png" alt="The Go to Heading list over a notebook: every heading with its level or status icon, cell count and output size" width="600">
 - **Select whole sections** (right-click → **Select Section**): selects the
   heading's cells, or lines in Markdown, including all its subsections, so
   you can cut, copy, move, run or delete the section with VS Code's own
   commands. Select several headings first (`Cmd`/`Ctrl`-click or
   `Shift`-click) to select all their sections at once.
+  <br><img src="media/screenshots/select-section.png" alt="Select Section on a heading: all nine cells of the section are selected in the notebook" width="600">
 - **Right-click to copy** a heading's text, a **section reference** with its
   file, full path and cell range (e.g.
   `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · cells 12–30`; handy for

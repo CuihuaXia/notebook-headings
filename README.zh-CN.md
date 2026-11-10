@@ -23,8 +23,8 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **跟随当前位置**：在文档里点击或滚动时，目录自动高亮当前小节；不会自动展开你折叠起来的部分。
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。<br><img src="media/screenshots/filter.png" alt="搜索 model：只留下匹配的标题和它们的上级标题" width="600">
-- **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。
-- **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。
+- **快速跳转**（在 notebook 或 Markdown 编辑器中 `Cmd+Alt+O`）：弹出所有标题的搜索列表。<br><img src="media/screenshots/go-to-heading.png" alt="notebook 上方的"跳转到标题"列表：每个标题带层级或状态图标、cell 数和输出大小" width="600">
+- **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。<br><img src="media/screenshots/select-section.png" alt="在标题上选中整节：这一节的 9 个 cell 在 notebook 里全部被选中" width="600">
 - **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
 - **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。<br><img src="media/screenshots/tags.png" alt="代码 cell 的标签勾选列表，勾选了 hide-output" width="600">
