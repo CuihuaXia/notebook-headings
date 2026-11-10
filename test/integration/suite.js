@@ -72,6 +72,31 @@ const tests = [
     },
   ],
   [
+    'Go to Heading has a two-step shortcut and a button in the notebook toolbar and the Markdown title bar',
+    async () => {
+      const c = vscode.extensions.getExtension('cuihuaxia.notebook-headings').packageJSON.contributes;
+      const key = c.keybindings.find((k) => k.command === 'notebookHeadings.quickJump');
+      assert.deepEqual([key.key, key.mac], ['ctrl+k h', 'cmd+k h']);
+      assert.ok(c.menus['notebook/toolbar'].some((m) => m.command === 'notebookHeadings.quickJump' && /^navigation/.test(m.group)));
+      assert.ok(c.menus['editor/title'].some((m) => m.command === 'notebookHeadings.quickJump' && /markdown/.test(m.when)));
+      // The command lists the headings of the active document.
+      await openMarkdown('sample.md');
+      const create = vscode.window.createQuickPick;
+      let shown;
+      vscode.window.createQuickPick = () => {
+        const qp = create.call(vscode.window);
+        qp.show = () => (shown = qp.items.map((i) => i.node.text));
+        return qp;
+      };
+      try {
+        await vscode.commands.executeCommand('notebookHeadings.quickJump');
+        assert.ok(shown && shown.includes('Check missing values'));
+      } finally {
+        vscode.window.createQuickPick = create;
+      }
+    },
+  ],
+  [
     'Markdown: turning the markdown setting off clears the tree',
     async () => {
       await openMarkdown('sample.md');

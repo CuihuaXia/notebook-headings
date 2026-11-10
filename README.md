@@ -41,8 +41,9 @@ you see the structure first and drill down on demand.
 - **Filter** (`Cmd+Alt+F` / `Ctrl+Alt+F` in the view): live search with match
   highlighting; matches keep their parent headings visible.
   <br><img src="media/screenshots/filter.png" alt="Filtering the headings for model: only the matching headings and their parents stay" width="600">
-- **Go to Heading** (`Cmd+Alt+O` / `Ctrl+Alt+O` in a notebook or Markdown
-  editor): a searchable list of all headings.
+- **Go to Heading** (the **Headings** button at the top of a notebook or
+  Markdown editor, or `Cmd+K` then `H` / `Ctrl+K` then `H`): a searchable
+  list of all headings, also when the view is closed.
   <br><img src="media/screenshots/go-to-heading.png" alt="The Go to Heading list over a notebook: every heading with its level or status icon, cell count and output size" width="600">
 - **Select whole sections** (right-click → **Select Section**): selects the
   heading's cells, or lines in Markdown, including all its subsections, so
@@ -218,7 +219,7 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 
 | Shortcut (macOS / Windows, Linux) | Where | Command |
 | --- | --- | --- |
-| `Cmd+Alt+O` / `Ctrl+Alt+O` | notebook or Markdown editor | Go to Heading… |
+| `Cmd+K` then `H` / `Ctrl+K` then `H` | a notebook or Markdown file is open (focus in the editor or in the headings view) | Go to Heading… |
 | `Cmd+Alt+F` / `Ctrl+Alt+F` | Notebook Headings view | Filter Headings |
 
 ## Settings

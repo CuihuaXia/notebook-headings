@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.11.0 — 2026-11-10
+
+**New**
+
+- **Go to Heading** has a button: **Headings** in the toolbar of a
+  notebook, and an icon at the top right of a Markdown editor. It works
+  when the headings view is closed, too.
+
+**Changed**
+
+- The shortcut of Go to Heading is now `Cmd+K` then `H` (`Ctrl+K` then `H`
+  on Windows and Linux). The old `Cmd+Alt+O` / `Ctrl+Alt+O` is VS Code's own
+  shortcut for the remote menu. If you had changed it yourself, your
+  setting stays.
+- The shortcut also works while the headings view has the focus, not only
+  in the editor.
+- The Go to Heading list says how to use it (type to search, Enter to
+  jump, Esc to close).
+- README: all pictures retaken at a higher resolution.
+
 ## 1.10.3 — 2026-11-10
 
 **Fixed**

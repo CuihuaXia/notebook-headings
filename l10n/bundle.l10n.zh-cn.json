@@ -12,7 +12,7 @@
   "Copied: {0}": "已复制：{0}",
   "Edit Cell Tags": "编辑 cell 标签",
   "Filter headings (Enter to keep, Esc to cancel)": "筛选标题（Enter 保留，Esc 取消）",
-  "Go to heading": "跳转到标题",
+  "Go to heading (type to search, Enter to jump, Esc to close)": "跳转到标题（输入可搜索，回车跳转，Esc 关闭）",
   "Notebook Headings: Current Section": "Notebook Headings：当前小节",
   "Notebook Headings: no headings in the current editor.": "Notebook Headings：当前编辑器中没有标题。",
   "Notebook Headings: select a notebook cell first.": "Notebook Headings：请先选中一个 notebook cell。",

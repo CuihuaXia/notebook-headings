@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.10.3",
+  "version": "1.11.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -93,7 +93,8 @@
       {
         "command": "notebookHeadings.quickJump",
         "title": "%command.quickJump%",
-        "icon": "$(go-to-search)"
+        "icon": "$(list-tree)",
+        "shortTitle": "%command.quickJump.short%"
       },
       {
         "command": "notebookHeadings.filter",
@@ -336,6 +337,20 @@
           "when": "notebookType == 'jupyter-notebook' && notebookCellType == markup",
           "group": "inline/cell@1"
         }
+      ],
+      "notebook/toolbar": [
+        {
+          "command": "notebookHeadings.quickJump",
+          "when": "notebookType == 'jupyter-notebook'",
+          "group": "navigation/headings@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "notebookHeadings.quickJump",
+          "when": "resourceLangId == markdown && config.notebookHeadings.markdown",
+          "group": "navigation@9"
+        }
       ]
     },
     "configuration": {
@@ -415,9 +430,9 @@
       },
       {
         "command": "notebookHeadings.quickJump",
-        "key": "ctrl+alt+o",
-        "mac": "cmd+alt+o",
-        "when": "notebookEditorFocused || editorLangId == markdown"
+        "key": "ctrl+k h",
+        "mac": "cmd+k h",
+        "when": "notebookEditorFocused || activeEditor == 'workbench.editor.notebook' || resourceLangId == markdown || editorLangId == markdown || focusedView == notebookHeadings.view"
       }
     ],
     "colors": [

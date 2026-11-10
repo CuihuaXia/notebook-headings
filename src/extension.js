@@ -1549,8 +1549,12 @@ function activate(context) {
     }
   };
 
-  /** "Go to Heading…": a searchable list of all headings. */
+  /**
+   * "Go to Heading…": a searchable list of all headings. Also a button in
+   * the notebook toolbar and, for Markdown files, in the editor title bar.
+   */
   const quickJump = () => {
+    track(); // the button may belong to an editor that has just become active
     if (!provider.source || !provider.flat.length) {
       vscode.window.showInformationMessage(t('Notebook Headings: no headings in the current editor.'));
       return;
@@ -1567,7 +1571,7 @@ function activate(context) {
     }));
     const qp = vscode.window.createQuickPick();
     qp.items = items;
-    qp.placeholder = t('Go to heading');
+    qp.placeholder = t('Go to heading (type to search, Enter to jump, Esc to close)');
     qp.matchOnDescription = false;
     const active = items.find((i) => i.node === current);
     if (active) qp.activeItems = [active]; // start at the current section
