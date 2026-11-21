@@ -97,6 +97,45 @@ const tests = [
     },
   ],
   [
+    'The showPosition setting puts the cell or line number before each heading',
+    async () => {
+      const cfg = vscode.workspace.getConfiguration('notebookHeadings');
+      const lbl = (text) => provider().getTreeItem(node(text)).label.label;
+      try {
+        await openMarkdown('sample.md');
+        assert.doesNotMatch(lbl('Check missing values'), /^L\d+ │/, 'off by default');
+        const md = node('Check missing values');
+        assert.match(provider().getTreeItem(md).description, new RegExp(`^${md.size} lines?( · |$)`), 'Markdown sections show their length in lines');
+        await cfg.update('showPosition', true, vscode.ConfigurationTarget.Global);
+        await until(() => /^L26 │ /.test(lbl('Check missing values')), 'the line number of #### Check missing values');
+        const nb = await openNotebook('showcase.ipynb');
+        const n = node('Price distribution');
+        assert.ok(lbl('Price distribution').startsWith(`C${n.pos + 1} │ `), lbl('Price distribution'));
+        assert.match(nb.cellAt(n.pos).document.getText(), /Price distribution/, 'that is the heading\'s own cell');
+        assert.doesNotMatch(provider().getTreeItem(n).description || '', /C\d/, 'not repeated in the grey text');
+        assert.match(provider().getTreeItem(n).description, new RegExp(`^${n.size} cells? · `), 'the cell count names its unit');
+        assert.match(provider().getTreeItem(n).tooltip, new RegExp(`starts at cell ${n.pos + 1} · ${n.size} cells?`));
+        // Go to Heading shows the same start before each heading.
+        const create = vscode.window.createQuickPick;
+        let shown;
+        vscode.window.createQuickPick = () => {
+          const qp = create.call(vscode.window);
+          qp.show = () => (shown = qp.items.find((i) => i.node.text === 'Price distribution'));
+          return qp;
+        };
+        try {
+          await vscode.commands.executeCommand('notebookHeadings.quickJump');
+        } finally {
+          vscode.window.createQuickPick = create;
+        }
+        assert.ok(shown && shown.label.includes(`C${n.pos + 1} │ `), shown && shown.label);
+      } finally {
+        await cfg.update('showPosition', undefined, vscode.ConfigurationTarget.Global);
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      }
+    },
+  ],
+  [
     'Markdown: turning the markdown setting off clears the tree',
     async () => {
       await openMarkdown('sample.md');

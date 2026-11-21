@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -377,6 +377,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.followCursor%"
+        },
+        "notebookHeadings.showPosition": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.showPosition%"
         },
         "notebookHeadings.showCellCount": {
           "type": "boolean",

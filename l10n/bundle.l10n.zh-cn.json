@@ -88,5 +88,7 @@
   "Notebook Headings: open a notebook or Markdown file first.": "Notebook Headings：请先打开一个 notebook 或 Markdown 文件。",
   "Clear Status": "清除状态",
   "Notebook Headings: this cell has no heading.": "Notebook Headings：这个 cell 里没有标题。",
-  "Which heading?": "哪个标题？"
+  "Which heading?": "哪个标题？",
+  "starts at cell {0} · {1}": "从第 {0} 个 cell 开始 · {1}",
+  "starts at line {0} · {1}": "从第 {0} 行开始 · {1}"
 }

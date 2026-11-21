@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.12.0 — 2026-11-21
+
+**New**
+
+- Setting `notebookHeadings.showPosition` (off by default): each heading
+  in the tree starts with where its section begins, set apart by a bar —
+  `C14 │`, the cell number as in the status bar's "Cell 14 of 33", in
+  notebooks, and `L26 │`, the line number, in Markdown files.
+
+**Changed**
+
+- The cell count after a notebook heading now says what it is: `34 cells`
+  instead of `34`.
+- Markdown headings show their section's length too, e.g. `12 lines`
+  (setting `notebookHeadings.showCellCount`).
+- The tooltip of a heading says where its section starts and how long it
+  is, e.g. "starts at cell 14 · 2 cells".
+- Go to Heading shows the same as the tree: the section's length, and the
+  start (`C14 │`) when `notebookHeadings.showPosition` is on.
+- README: pictures retaken, and a new one for the cell and line numbers.
+
 ## 1.11.0 — 2026-11-10
 
 **New**

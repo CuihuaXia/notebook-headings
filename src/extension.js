@@ -120,6 +120,14 @@ const rankColor = (rank) => new vscode.ThemeColor(`notebookHeadings.level${rank}
 /** Label of a node honoring the `numbering` setting. */
 const label = (node) => labelOf(node, setting('numbering', true));
 
+/**
+ * Where a section starts, put before its label when `showPosition` is on
+ * (the tree and Go to Heading): `C14 │ ` (cell number, as in the status
+ * bar's "Cell 14 of 33") or `L26 │ ` (line number); otherwise empty.
+ */
+const positionTag = (node, notebook) =>
+  setting('showPosition', false) ? `${notebook ? 'C' : 'L'}${node.pos + 1} │ ` : '';
+
 /** Translated UI text (falls back to English); see l10n/ and package.nls*.json. */
 const t = vscode.l10n.t;
 
@@ -1118,10 +1126,14 @@ class HeadingsProvider {
     if (node.file) return this.fileItem(node);
     const ref = node.ref;
     if (ref) node = ref;
-    const text = label(node);
+    const kind = this.markedOnly && node.fileNode ? node.fileNode.kind : this.source && this.source.kind;
+    const notebook = kind === 'notebook';
+    // Where the section starts, first in the label so a long heading never
+    // hides it (see positionTag()).
+    const text = positionTag(node, notebook) + label(node);
     const treeLabel = { label: text };
     if (!ref && node.matchAt >= 0) {
-      // The match index is relative to node.text; shift past the number prefix.
+      // The match index is relative to node.text; shift past the prefixes.
       const start = text.length - node.text.length + node.matchAt;
       treeLabel.highlights = [[start, start + this.filter.length]];
     }
@@ -1148,11 +1160,14 @@ class HeadingsProvider {
     const stored = node.status && !node.autoStatus ? '.status' : '';
     item.contextValue = other ? 'projectHeading' : `heading${node.star ? '.pinned' : ''}${stored}`;
 
-    const kind = this.markedOnly && node.fileNode ? node.fileNode.kind : this.source && this.source.kind;
-    const notebook = kind === 'notebook';
     const size = notebook ? formatBytes(node.bytes) : '';
     const status = node.status && statusById(node.status);
-    const lines = [`${'#'.repeat(node.level)} ${node.text}`, notebook ? cellsText(node.size) : t('line {0}', node.pos + 1)];
+    const lines = [
+      `${'#'.repeat(node.level)} ${node.text}`,
+      notebook
+        ? t('starts at cell {0} · {1}', node.pos + 1, cellsText(node.size))
+        : t('starts at line {0} · {1}', node.pos + 1, linesText(node.size)),
+    ];
     if (size) lines.push(t('outputs: {0}', size));
     if (status) lines.push(node.autoStatus ? t('Status: {0} (from the heading text)', t(status.label)) : t('Status: {0}', t(status.label)));
     if (node.star) lines.push(t('Pinned'));
@@ -1167,7 +1182,7 @@ class HeadingsProvider {
     }
     item.tooltip = lines.join('\n');
 
-    // Description: "34 · 2.1 MB · ○2 ➤1 ✓3 ⤒2" (cells, output size, then the
+    // Description: "34 cells · 2.1 MB · ○2 ➤1 ✓3 ⤒2" (cells or lines, output size, then the
     // statuses and pins below the heading, at any depth). Pinned shortcuts
     // show their path instead.
     const parts = [];
@@ -1175,7 +1190,8 @@ class HeadingsProvider {
       const path = ancestry(node).slice(0, -1).filter((n) => n.rank !== 0);
       if (path.length) parts.push(path.map(label).join(' › '));
     } else {
-      if (notebook && setting('showCellCount', true)) parts.push(`${node.size}`);
+      // The section's length: cells in a notebook, lines in a Markdown file.
+      if (setting('showCellCount', true)) parts.push(notebook ? cellsText(node.size) : linesText(node.size));
       if (size && setting('showOutputSize', true)) parts.push(size);
       if (counts) parts.push(counts);
     }
@@ -1563,10 +1579,11 @@ function activate(context) {
     const current = headingAt(provider.flat, cursorPos(provider.source));
     const items = provider.flat.map((node) => ({
       // Em spaces indent by depth; $(icon) renders the level shape.
-      label: `${' '.repeat(ancestry(node).length - 1)}$(${node.status ? statusById(node.status).icon : RANK_ICONS[node.rank]}) ${node.star ? '$(pinned) ' : ''}${label(node)}`,
+      label: `${' '.repeat(ancestry(node).length - 1)}$(${node.status ? statusById(node.status).icon : RANK_ICONS[node.rank]}) ${node.star ? '$(pinned) ' : ''}${positionTag(node, notebook)}${label(node)}`,
+      // Like the tree: the section's length, and for notebooks its outputs.
       description: notebook
         ? [cellsText(node.size), formatBytes(node.bytes)].filter(Boolean).join(' · ')
-        : t('line {0}', node.pos + 1),
+        : linesText(node.size),
       node,
     }));
     const qp = vscode.window.createQuickPick();

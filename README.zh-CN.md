@@ -19,7 +19,8 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **默认只展开到指定层级**：所有标题都在，只是更深的层级先折叠。随时点"折叠到默认层级"按钮恢复。
 - **自动编号**：`1`、`1.2`、`1.2.3`。只有一个 `#` 标题时把它当作页面标题，不编号，从 `##` 开始编 1、2、3。工具栏一键开关。
 - **按层级区分颜色和形状**：`##` 红 ●、`###` 橙 ◆、`####` 蓝 ■、`#####` 紫 ▲、`######` 橄榄 ⬢，浅色/深色主题各有一套配色，颜色可自定义。
-- **小节 cell 数和输出大小**：notebook 中每个标题右侧的灰色文字显示该小节包含的 cell 数和输出总大小，例如 `34 · 2.1 MB`，方便找出让 notebook 变大或渲染变慢的小节。
+- **小节长度和输出大小**：每个标题右侧的灰色文字显示这一节有多长（notebook 是 cell 数，Markdown 是行数），notebook 还会显示输出总大小，例如 `34 cells · 2.1 MB`（中文界面是 `34 个 cell · 2.1 MB`），方便找出让 notebook 变大或渲染变慢的小节。
+- **显示 cell 编号或行号（可选）**：打开设置 `notebookHeadings.showPosition`，每个标题最前面会显示这一节从哪里开始，例如 `C14 │ 3.1  Summary`（第 14 个 cell，和状态栏的 "Cell 14 of 33" 一致），Markdown 里是 `L26 │`（第 26 行），方便按 cell 编号或行号对照定位。<br><img src="media/screenshots/positions.png" alt="打开 showPosition 后的目录：每个标题前面显示它的 cell 编号，如 C14，用竖线隔开" width="400">
 - **跟随当前位置**：在文档里点击或滚动时，目录自动高亮当前小节；不会自动展开你折叠起来的部分。
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。<br><img src="media/screenshots/filter.png" alt="搜索 model：只留下匹配的标题和它们的上级标题" width="600">
@@ -126,7 +127,8 @@ code --install-extension releases/notebook-headings-<version>.vsix
 | `notebookHeadings.numbering` | `true` | 显示编号 |
 | `notebookHeadings.numberH1` | `false` | 一级标题 `#` 也参与编号 |
 | `notebookHeadings.levelColors` | `true` | 按层级上色并显示形状图标 |
-| `notebookHeadings.showCellCount` | `true` | 显示 notebook 每个小节的 cell 数 |
+| `notebookHeadings.showPosition` | `false` | 在每个标题最前面显示这一节从哪里开始：notebook 是 cell 编号（如 `C14 │`），Markdown 是行号（如 `L26 │`） |
+| `notebookHeadings.showCellCount` | `true` | 显示每个小节的长度：notebook 是 cell 数，Markdown 是行数 |
 | `notebookHeadings.showOutputSize` | `true` | 显示 notebook 每个小节的输出总大小 |
 | `notebookHeadings.followCursor` | `true` | 目录高亮当前所在小节 |
 | `notebookHeadings.statusBar` | `true` | 状态栏显示当前小节 |

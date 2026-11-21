@@ -30,10 +30,16 @@ you see the structure first and drill down on demand.
 - **Level colors and shapes.** `##` red ●, `###` orange ◆, `####` blue ■,
   `#####` purple ▲, `######` olive ⬢, with separate light and dark theme
   colors. Every color can be overridden.
-- **Cell counts and output sizes.** For notebooks, the grey text after a
-  heading shows how many cells the section has and how much output they store,
-  e.g. `34 · 2.1 MB`, so you can spot the sections that make a notebook large
-  or slow to render.
+- **Section lengths and output sizes.** The grey text after a heading shows
+  how long the section is — cells in a notebook, lines in a Markdown file —
+  and, for notebooks, how much output it stores, e.g. `34 cells · 2.1 MB`, so
+  you can spot the sections that make a notebook large or slow to render.
+- **Cell and line numbers (optional).** Turn on
+  `notebookHeadings.showPosition` to start each heading with where its
+  section begins, e.g. `C14 │ 3.1  Summary` (cell 14, as in the status bar's
+  "Cell 14 of 33") or `L26 │` (line 26) in Markdown, so you can match the
+  tree with cell or line numbers at a glance.
+  <br><img src="media/screenshots/positions.png" alt="The headings view with showPosition on: each heading starts with its cell number, such as C14, set apart by a bar" width="400">
 - **Follows the cursor.** Clicking or scrolling in the document highlights the
   current section without expanding anything you collapsed.
 - **Status bar** shows the current section; hover for the full path, click to
@@ -230,7 +236,8 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | `notebookHeadings.numbering` | `true` | Show outline numbers. |
 | `notebookHeadings.numberH1` | `false` | Also number `#` headings. |
 | `notebookHeadings.levelColors` | `true` | Color headings and icons by level. |
-| `notebookHeadings.showCellCount` | `true` | Show the cell count of each notebook section. |
+| `notebookHeadings.showPosition` | `false` | Show where each section starts, before each heading: `C14 │` (cell number) in notebooks, `L26 │` (line) in Markdown. |
+| `notebookHeadings.showCellCount` | `true` | Show the length of each section: cells in a notebook, lines in a Markdown file. |
 | `notebookHeadings.showOutputSize` | `true` | Show the total output size of each notebook section. |
 | `notebookHeadings.followCursor` | `true` | Highlight the current section in the tree. |
 | `notebookHeadings.statusBar` | `true` | Show the current section in the status bar. |
