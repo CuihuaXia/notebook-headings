@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+
+- README: the tour shows the mouse pointer, with a red ring where it
+  clicks.
+
 ## 1.13.0 — 2026-11-22
 
 **New**
