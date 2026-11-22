@@ -6,7 +6,7 @@
 
 VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法看。这个扩展保留全部六级标题，但打开时只展开到你设定的层级（默认到 `##`），先看整体结构，需要时再逐级展开。
 
-<img src="media/screenshots/tour.gif" alt="功能演示：目录打开时折叠，点标题跳到对应小节，右键设置状态，书签按钮按文件列出整个项目里有标记的标题，搜索框边输入边过滤" width="800">
+<img src="media/screenshots/tour.gif" alt="功能演示：目录打开时折叠，点标题跳到对应小节，右键设置状态，书签按钮按文件列出整个项目里有标记的标题，搜索框边输入边过滤，侧边栏关着时用 Headings 按钮打开跳转列表" width="800">
 
 ## 快速上手
 
@@ -20,11 +20,11 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **自动编号**：`1`、`1.2`、`1.2.3`。只有一个 `#` 标题时把它当作页面标题，不编号，从 `##` 开始编 1、2、3。工具栏一键开关。
 - **按层级区分颜色和形状**：`##` 红 ●、`###` 橙 ◆、`####` 蓝 ■、`#####` 紫 ▲、`######` 橄榄 ⬢，浅色/深色主题各有一套配色，颜色可自定义。
 - **小节长度和输出大小**：每个标题右侧的灰色文字显示这一节有多长（notebook 是 cell 数，Markdown 是行数），notebook 还会显示输出总大小，例如 `34 cells · 2.1 MB`（中文界面是 `34 个 cell · 2.1 MB`），方便找出让 notebook 变大或渲染变慢的小节。
-- **显示 cell 编号或行号（可选）**：打开设置 `notebookHeadings.showPosition`，每个标题最前面会显示这一节从哪里开始，例如 `C14 │ 3.1  Summary`（第 14 个 cell，和状态栏的 "Cell 14 of 33" 一致），Markdown 里是 `L26 │`（第 26 行），方便按 cell 编号或行号对照定位。<br><img src="media/screenshots/positions.png" alt="打开 showPosition 后的目录：每个标题前面显示它的 cell 编号，如 C14，用竖线隔开" width="400">
+- **显示 cell 编号或行号（可选）**：点目录工具栏上的 **#** 按钮（或者打开设置 `notebookHeadings.showPosition`），每个标题最前面会显示这一节从哪里开始，例如 `C14 │ 3.1  Summary`（第 14 个 cell，和状态栏的 "Cell 14 of 33" 一致），Markdown 里是 `L26 │`（第 26 行），方便按 cell 编号或行号对照定位。<br><img src="media/screenshots/positions.png" alt="打开 showPosition 后的目录：每个标题前面显示它的 cell 编号，如 C14，用竖线隔开" width="400">
 - **跟随当前位置**：在文档里点击或滚动时，目录自动高亮当前小节；不会自动展开你折叠起来的部分。
 - **状态栏显示当前小节**：悬停显示完整路径，点击打开目录。
 - **搜索过滤**（目录面板中 `Cmd+Alt+F`）：边输入边过滤，匹配文字高亮，保留上级标题。<br><img src="media/screenshots/filter.png" alt="搜索 model：只留下匹配的标题和它们的上级标题" width="600">
-- **快速跳转**（notebook 或 Markdown 编辑器顶部的 **Headings** 按钮，或者先按 `Cmd+K` 再按 `H`）：弹出所有标题的搜索列表，目录面板关着也能用。<br><img src="media/screenshots/go-to-heading.png" alt="notebook 上方的"跳转到标题"列表：每个标题带层级或状态图标、cell 数和输出大小" width="600">
+- **快速跳转**（notebook 或 Markdown 编辑器顶部的 **Headings** 按钮，或者先按 `Cmd+K` 再按 `H`）：弹出所有标题的搜索列表，目录面板关着也能用。<br><img src="media/screenshots/go-to-heading.png" alt="notebook 工具栏上用红框标出的 Headings 按钮，以及点它打开的跳转列表：每个标题带层级或状态图标、cell 数和输出大小" width="600">
 - **选中整节**（右键 → **Select Section**）：选中这一节的所有 cell（Markdown 中是所有行），包括下级小节，之后可以用 VS Code 自带的命令剪切、复制、移动、运行或删除整节。先用 `Cmd`/`Ctrl` + 点击或 `Shift` + 点击选中多个标题，就能一次选中多个小节。<br><img src="media/screenshots/select-section.png" alt="在标题上选中整节：这一节的 9 个 cell 在 notebook 里全部被选中" width="600">
 - **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
@@ -89,6 +89,7 @@ code --install-extension releases/notebook-headings-<version>.vsix
 | --- | --- |
 | Filter Headings（漏斗） | 输入关键词过滤；Enter 保留，Esc 取消。过滤时变成 ✕，点击清除。 |
 | Show Marked Headings（书签） | 按文件列出整个项目里所有 notebook 和 Markdown 文件中置顶或有任何状态的标题，当前文件排在最前；每个标题下面的整节都会展开显示。点别的文件里的标题会打开那个文件并跳过去。点 ✕ 返回。 |
+| # Toggle Cell and Line Numbers | 显示/隐藏每节的起始位置（`C14 │`、`L26 │`），等同于设置 `showPosition`。 |
 | 1≡ Toggle Heading Numbers | 显示/隐藏编号。 |
 | ⊟ Collapse to Default Level | 恢复默认展开层级。 |
 

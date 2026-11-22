@@ -6,6 +6,7 @@
   "command.filter": "筛选标题",
   "command.clearFilter": "清除筛选",
   "command.toggleNumbering": "显示/隐藏标题编号",
+  "command.togglePosition": "显示/隐藏 cell 编号和行号",
   "command.resetExpansion": "折叠到默认层级",
   "command.reveal": "跳转到标题",
   "command.copyTitle": "复制标题文字",

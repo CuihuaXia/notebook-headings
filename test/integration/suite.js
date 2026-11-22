@@ -104,6 +104,11 @@ const tests = [
       try {
         await openMarkdown('sample.md');
         assert.doesNotMatch(lbl('Check missing values'), /^L\d+ │/, 'off by default');
+        // The toolbar button switches the setting on (and off again below).
+        await vscode.commands.executeCommand('notebookHeadings.togglePosition');
+        await until(() => /^L26 │ /.test(lbl('Check missing values')), 'the button turns the numbers on');
+        await vscode.commands.executeCommand('notebookHeadings.togglePosition');
+        await until(() => !/^L\d+ │/.test(lbl('Check missing values')), 'and off again');
         const md = node('Check missing values');
         assert.match(provider().getTreeItem(md).description, new RegExp(`^${md.size} lines?( · |$)`), 'Markdown sections show their length in lines');
         await cfg.update('showPosition', true, vscode.ConfigurationTarget.Global);

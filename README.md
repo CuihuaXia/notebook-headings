@@ -10,7 +10,7 @@ notebook with 1,000+ headings. Notebook Headings keeps all six heading levels
 but opens the tree expanded only to the level you choose (default: `##`), so
 you see the structure first and drill down on demand.
 
-<img src="media/screenshots/tour.gif" alt="A short tour: the view opens collapsed, a click jumps to a section, a status is set from the right-click menu, the bookmark button lists the marked headings of every file in the project, and the filter narrows the tree as you type" width="800">
+<img src="media/screenshots/tour.gif" alt="A short tour: the view opens collapsed, a click jumps to a section, a status is set from the right-click menu, the bookmark button lists the marked headings of every file in the project, the filter narrows the tree as you type, and the Headings button opens Go to Heading with the side bar closed" width="800">
 
 ## Quick start
 
@@ -34,8 +34,8 @@ you see the structure first and drill down on demand.
   how long the section is — cells in a notebook, lines in a Markdown file —
   and, for notebooks, how much output it stores, e.g. `34 cells · 2.1 MB`, so
   you can spot the sections that make a notebook large or slow to render.
-- **Cell and line numbers (optional).** Turn on
-  `notebookHeadings.showPosition` to start each heading with where its
+- **Cell and line numbers (optional).** Click **#** in the view's toolbar
+  (or turn on `notebookHeadings.showPosition`) to start each heading with where its
   section begins, e.g. `C14 │ 3.1  Summary` (cell 14, as in the status bar's
   "Cell 14 of 33") or `L26 │` (line 26) in Markdown, so you can match the
   tree with cell or line numbers at a glance.
@@ -50,7 +50,7 @@ you see the structure first and drill down on demand.
 - **Go to Heading** (the **Headings** button at the top of a notebook or
   Markdown editor, or `Cmd+K` then `H` / `Ctrl+K` then `H`): a searchable
   list of all headings, also when the view is closed.
-  <br><img src="media/screenshots/go-to-heading.png" alt="The Go to Heading list over a notebook: every heading with its level or status icon, cell count and output size" width="600">
+  <br><img src="media/screenshots/go-to-heading.png" alt="The Headings button in the notebook toolbar, marked with a red box, and the Go to Heading list it opens: every heading with its level or status icon, cell count and output size" width="600">
 - **Select whole sections** (right-click → **Select Section**): selects the
   heading's cells, or lines in Markdown, including all its subsections, so
   you can cut, copy, move, run or delete the section with VS Code's own
@@ -163,6 +163,7 @@ View toolbar, left to right:
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
 | Show Marked Headings (bookmark) | The marked headings (pinned or with any status) of every notebook and Markdown file in the project, grouped by file with the current one first; each with its whole section expanded. Click a heading in another file to open it there. ✕ goes back. |
+| # Toggle Cell and Line Numbers | Show or hide where each section starts (`C14 │`, `L26 │`); the same as the `showPosition` setting. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
 

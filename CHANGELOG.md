@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.13.0 — 2026-11-22
+
+**New**
+
+- A **#** button in the view's toolbar turns the cell and line numbers
+  (`C14 │`, `L26 │`, setting `notebookHeadings.showPosition`) on and off.
+
+**Changed**
+
+- README: pictures retaken with the new button; the tour ends with the
+  **Headings** button in the notebook toolbar, and the Go to Heading picture
+  marks that button.
+
 ## 1.12.0 — 2026-11-21
 
 **New**

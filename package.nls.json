@@ -6,6 +6,7 @@
   "command.filter": "Filter Headings",
   "command.clearFilter": "Clear Filter",
   "command.toggleNumbering": "Toggle Heading Numbers",
+  "command.togglePosition": "Toggle Cell and Line Numbers",
   "command.resetExpansion": "Collapse to Default Level",
   "command.reveal": "Go to Heading",
   "command.copyTitle": "Copy Heading Text",

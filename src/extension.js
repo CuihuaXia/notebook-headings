@@ -2121,6 +2121,9 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.quickJump', quickJump),
     vscode.commands.registerCommand('notebookHeadings.filter', promptFilter),
     vscode.commands.registerCommand('notebookHeadings.clearFilter', () => setFilter('')),
+    vscode.commands.registerCommand('notebookHeadings.togglePosition', () =>
+      config().update('showPosition', !setting('showPosition', false), vscode.ConfigurationTarget.Global)
+    ),
     vscode.commands.registerCommand('notebookHeadings.toggleNumbering', () =>
       config().update('numbering', !setting('numbering', true), vscode.ConfigurationTarget.Global)
     ),
