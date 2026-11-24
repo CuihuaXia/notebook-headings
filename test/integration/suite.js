@@ -471,7 +471,10 @@ const tests = [
         await until(() => cell() === node('Read data').pos, 'back to the first');
         await vscode.commands.executeCommand('notebookHeadings.previousMark');
         await until(() => cell() === node('Spread').pos, 'previous: around to the last');
-        // Copy Marks as Checklist: every status, finished ones ticked, by file.
+        // Copy Marks as Checklist (a button of the bookmark view): every
+        // status, finished ones ticked, by file.
+        const titleMenu = vscode.extensions.getExtension('cuihuaxia.notebook-headings').packageJSON.contributes.menus['view/title'];
+        assert.match(titleMenu.find((x) => x.command === 'notebookHeadings.copyChecklist').when, /notebookHeadings\.markedOnly/);
         await vscode.commands.executeCommand('notebookHeadings.copyChecklist');
         const list = await vscode.env.clipboard.readText();
         assert.match(list, /^## more\.ipynb$/m);

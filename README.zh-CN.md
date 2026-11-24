@@ -29,7 +29,7 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
 - **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。<br><img src="media/screenshots/tags.png" alt="代码 cell 的标签勾选列表，勾选了 hide-output" width="600">
-- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色的状态图标。标题里带 `???` 的自动算作"待核对"。在 notebook 里，鼠标移到 Markdown cell 上时出现的工具条里也有**设置状态**按钮，可以设置或清除这个 cell 里标题的状态。鼠标悬停可以看到状态是哪天设的。目录工具栏上的 **↑ ↓**（先按 `Cmd+K` 再按 `B` / `N`）跳到上一个或下一个待做、进行中、待核对的标题；工具栏 `…` 菜单里的 **Copy Marks as Checklist**（复制标记清单）把整个项目的状态复制成 Markdown 清单，方便贴进笔记。<br><img src="media/screenshots/cell-status.png" alt="从 Markdown cell 工具条打开的状态列表，包含清除状态" width="600">
+- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色的状态图标。标题里带 `???` 的自动算作"待核对"。在 notebook 里，鼠标移到 Markdown cell 上时出现的工具条里也有**设置状态**按钮，可以设置或清除这个 cell 里标题的状态。鼠标悬停可以看到状态是哪天设的。目录工具栏上的 **↑ ↓**（先按 `Cmd+K` 再按 `B` / `N`）跳到上一个或下一个待做、进行中、待核对的标题；书签视图工具栏上的 **Copy Marks as Checklist**（复制标记清单）把整个项目的状态复制成 Markdown 清单，方便贴进笔记。<br><img src="media/screenshots/cell-status.png" alt="从 Markdown cell 工具条打开的状态列表，包含清除状态" width="600">
 - **置顶**：**Pin to Top**（置顶）在标题前显示金色图钉图标，并把标题列到目录顶部的"已置顶"分组里，点一下就能跳过去。
 - **折叠起来也看得到标记**：每个上级标题会汇总它下面的标记，例如 `○2 ➤1 ✓3 ⤒2`（○ 待做、➤ 进行中、? 待核对、✓ 已完成、⤒ 置顶）；书签按钮按文件列出整个项目里有标记的小节。标记保存在项目里而不是你的文档里，换电脑也能接着用。<br><img src="media/screenshots/project-marks.png" alt="书签视图：一个 notebook 和一个 Markdown 文件里有标记的标题，各自列在文件名下面；活动栏图标上的数字是还待做或待核对的标题数" width="400">
 - **清除小节输出**（右键 → **Clear Section Outputs…**）：目录里的输出大小能看出是哪些小节让 notebook 变大，确认后一步清除，需要时用 `Cmd+Z` 恢复。
@@ -93,7 +93,7 @@ code --install-extension releases/notebook-headings-<version>.vsix
 | # Toggle Cell and Line Numbers | 显示/隐藏每节的起始位置（`C14 │`、`L26 │`），等同于设置 `showPosition`。 |
 | 1≡ Toggle Heading Numbers | 显示/隐藏编号。 |
 | ⊟ Collapse to Default Level | 恢复默认展开层级。 |
-| `…` → Copy Marks as Checklist | 把项目里所有设了状态的标题复制成 Markdown 清单，按文件分组（已完成的打勾），并写明从哪天开始。 |
+| ⧉ Copy Marks as Checklist（书签视图里） | 把项目里所有设了状态的标题复制成 Markdown 清单，按文件分组（已完成的打勾），并写明从哪天开始。 |
 
 在标题上**右键**：
 

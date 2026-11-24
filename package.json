@@ -2,7 +2,7 @@
   "name": "notebook-headings",
   "displayName": "Notebook Headings – Outline for Jupyter & Markdown",
   "description": "%extension.description%",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "publisher": "cuihuaxia",
   "author": {
     "name": "Cuihua Xia"
@@ -201,7 +201,7 @@
       {
         "command": "notebookHeadings.copyChecklist",
         "title": "%command.copyChecklist%",
-        "icon": "$(checklist)"
+        "icon": "$(copy)"
       },
       {
         "command": "notebookHeadings.moveLostMark",
@@ -265,8 +265,8 @@
         },
         {
           "command": "notebookHeadings.copyChecklist",
-          "when": "view == notebookHeadings.view",
-          "group": "9_copy@1"
+          "when": "view == notebookHeadings.view && notebookHeadings.markedOnly",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [

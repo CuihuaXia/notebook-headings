@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.14.1 — 2026-11-24
+
+**Changed**
+
+- **Copy Marks as Checklist** moved from the toolbar's `…` menu to a button
+  (a copy icon) in Show Marked Headings (the bookmark view), next to the
+  marks it copies; the `…` menu is gone.
+- README: pictures retaken for the new toolbar.
+
 ## 1.14.0 — 2026-11-24
 
 **New**

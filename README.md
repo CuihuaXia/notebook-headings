@@ -77,8 +77,8 @@ you see the structure first and drill down on demand.
   cell also has **Set Status…** for the cell's heading, with Clear Status.
   The tooltip says since when a heading has its status. **↑ ↓** in the
   view's toolbar (`Cmd+K` then `B` / `N`) jump to the previous or next
-  heading still to do, in progress or to check; **Copy Marks as Checklist**
-  (in the toolbar's `…` menu) copies the project's statuses as a Markdown
+  heading still to do, in progress or to check; in the bookmark view,
+  **Copy Marks as Checklist** copies the project's statuses as a Markdown
   checklist, to paste into your notes.
   <br><img src="media/screenshots/cell-status.png" alt="The status list opened from the toolbar of a Markdown cell, with Clear Status" width="600">
 - **Pin to top.** **Pin to Top** puts a gold pin icon before a heading and
@@ -172,7 +172,7 @@ View toolbar, left to right:
 | # Toggle Cell and Line Numbers | Show or hide where each section starts (`C14 │`, `L26 │`); the same as the `showPosition` setting. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
-| `…` → Copy Marks as Checklist | Every heading with a status in the project, as a Markdown checklist grouped by file (Finished ones ticked), with since when. |
+| ⧉ Copy Marks as Checklist (in the bookmark view) | Every heading with a status in the project, as a Markdown checklist grouped by file (Finished ones ticked), with since when. |
 
 Right-click a heading for:
 

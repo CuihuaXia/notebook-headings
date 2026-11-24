@@ -1669,6 +1669,8 @@ function activate(context) {
     }
     else view.description = q ? `"${q}" · ${matches === 1 ? t('1 match') : t('{0} matches', matches)}` : undefined;
     vscode.commands.executeCommand('setContext', 'notebookHeadings.filtering', provider.filtering);
+    // Show Marked Headings has its own toolbar button: Copy Marks as Checklist.
+    vscode.commands.executeCommand('setContext', 'notebookHeadings.markedOnly', provider.markedOnly);
   };
 
   /** Badge on the view's icon: headings still To do or To check in the whole project. */
