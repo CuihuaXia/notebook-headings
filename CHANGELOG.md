@@ -1,11 +1,46 @@
 # Changelog
 
-## Unreleased
+## 1.14.0 — 2026-11-24
+
+**New**
+
+- Notebook marks are tied to their cell when its cells have ids (nbformat
+  4.5, saved by recent Jupyter and VS Code): a heading renamed in another
+  editor or by a `git pull` keeps its mark. Existing marks get the id the
+  next time the notebook is edited or a mark is set.
+- **Go to Previous / Next Mark** (↑ ↓ in the view's toolbar, `Cmd+K` then
+  `B` / `N`): jump through the headings still to do, in progress or to check.
+- **Copy Marks as Checklist** (the toolbar's `…` menu): the project's
+  statuses as a Markdown checklist, grouped by file.
+- A status remembers the day it was set; the tooltip shows it.
+- **Marks without a heading**: Show Marked Headings lists marks whose
+  heading was deleted or renamed outside VS Code; move one to a heading, or
+  remove it.
 
 **Changed**
 
-- README: the tour shows the mouse pointer, with a red ring where it
-  clicks.
+- **Set Status…** in a heading's right-click menu also lists **Clear
+  Status** when the heading has a status you set, as the cell toolbar's
+  Set Status… does.
+- README: pictures retaken; the tour shows the mouse pointer (a red ring
+  where it clicks) and the arrow buttons, and a new picture shows Marks
+  without a heading.
+- In Markdown files and notebooks without cell ids, a heading renamed
+  outside VS Code no longer passes its mark to whatever heading is now in
+  its place; the mark waits under Marks without a heading.
+
+**Fixed**
+
+- Deleting a marked heading moved its mark to the next heading, so the
+  parent's summary still counted it. The mark now leaves the tree with its
+  heading, and comes back if the heading is pasted back.
+- Renaming a marked heading could lose its mark (when headings had been added
+  above it since the mark was set). Renames made in VS Code are now followed
+  as you type.
+- A copy of a marked heading pasted above it took the mark from the
+  original; the original keeps it now, and copies get no mark.
+- Show Marked Headings could miss other files of the project when a
+  background search started at the same moment.
 
 ## 1.13.0 — 2026-11-22
 

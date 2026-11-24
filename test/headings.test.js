@@ -422,3 +422,18 @@ test('notebookCellsFromJson reads cells of an .ipynb text; bad files give no cel
   assert.deepEqual(h.notebookCellsFromJson('{ not json'), []);
   assert.deepEqual(h.notebookCellsFromJson('{"cells": 3}'), []);
 });
+
+test('notebook headings carry the id of their cell (nbformat 4.5)', () => {
+  const json = JSON.stringify({
+    cells: [
+      { cell_type: 'markdown', id: 'a1', source: ['# T\n', '## A'] },
+      { cell_type: 'markdown', source: '## B' },
+    ],
+  });
+  const cells = h.notebookCellsFromJson(json);
+  assert.deepEqual(cells.map((c) => c.id), ['a1', undefined]);
+  assert.deepEqual(
+    h.parseNotebookHeadings(cells).map((x) => [x.text, x.slot, x.cellId]),
+    [['T', 0, 'a1'], ['A', 1, 'a1'], ['B', 0, undefined]]
+  );
+});

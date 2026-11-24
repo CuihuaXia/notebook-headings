@@ -39,5 +39,10 @@
   "command.showMarked": "Show Marked Headings",
   "command.copyContent": "Copy Section Content",
   "config.toCheckMarkers": "Headings whose text contains one of these markers show as \"To check\" without setting a status, e.g. \"## ??? Analysis\". An empty list turns this off.",
-  "command.clearOutputs": "Clear Section Outputs…"
+  "command.clearOutputs": "Clear Section Outputs…",
+  "command.previousMark": "Go to Previous Mark",
+  "command.nextMark": "Go to Next Mark",
+  "command.copyChecklist": "Copy Marks as Checklist",
+  "command.moveLostMark": "Move to Heading…",
+  "command.removeLostMark": "Remove Mark"
 }

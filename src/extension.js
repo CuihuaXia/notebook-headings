@@ -26,6 +26,7 @@ const os = require('node:os');
 const path = require('node:path');
 const vscode = require('vscode');
 const {
+  scanHeadings,
   notebookCellsFromJson,
   parseNotebookHeadings,
   parseMarkdownHeadings,
@@ -48,6 +49,11 @@ const {
   cleanMarks,
   readMarks,
   resolveMarks,
+  lostMarks,
+  placesOf,
+  alignTexts,
+  followMarks,
+  followLine,
   updateMarks,
   combineMarks,
   occurrences,
@@ -119,6 +125,21 @@ const rankColor = (rank) => new vscode.ThemeColor(`notebookHeadings.level${rank}
 
 /** Label of a node honoring the `numbering` setting. */
 const label = (node) => labelOf(node, setting('numbering', true));
+
+/** Today on this computer, as YYYY-MM-DD (the date stored with a new status). */
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** A stored date (YYYY-MM-DD) in VS Code's display language, e.g. "24 Nov 2026". */
+function formatDay(iso) {
+  const date = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString(vscode.env.language, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Statuses the Go to Next/Previous Mark commands stop at: not yet finished. */
+const isOpenStatus = (status) => status === 'todo' || status === 'doing' || status === 'question';
 
 /**
  * Where a section starts, put before its label when `showPosition` is on
@@ -257,7 +278,8 @@ function headingsAndMarks(kind, input, stored) {
   if (kind === 'notebook') {
     const headings = parseNotebookHeadings(input.cells).map((h, i) => ({ ...h, cellSlot: h.slot, slot: i }));
     const { marks, legacy } = combineMarks(headings, stored, (pos) => input.cellMarks[pos]);
-    return { headings, total: input.cells.length, cellBytes: input.cellBytes, marks, legacy };
+    const lost = lostMarks(stored, headings.map((h) => h.text), placesOf(headings));
+    return { headings, total: input.cells.length, cellBytes: input.cellBytes, marks, legacy, lost };
   }
   const headings = parseMarkdownHeadings(input.text).map((h, i) => ({ ...h, slot: i }));
   const texts = headings.map((h) => h.text);
@@ -266,7 +288,7 @@ function headingsAndMarks(kind, input, stored) {
   resolveMarks(stored, texts).forEach((m, i) => {
     if (m) marks[i] = { ...m, text: texts[i], ...(occ[i] ? { n: occ[i] } : {}) };
   });
-  return { headings, total: input.lineCount, marks, legacy: new Set() };
+  return { headings, total: input.lineCount, marks, legacy: new Set(), lost: lostMarks(stored, texts) };
 }
 
 /**
@@ -283,7 +305,7 @@ function readOpenDocument(kind, doc, marksFile) {
       const cell = doc.cellAt(i);
       const isMarkdown = isMarkdownCell(cell);
       // Only Markdown cells are parsed, so code cell text is never read.
-      cells.push({ isMarkdown, text: isMarkdown ? cell.document.getText() : '' });
+      cells.push({ isMarkdown, text: isMarkdown ? cell.document.getText() : '', id: cellIdOf(cell, custom) });
       cellBytes.push(cellOutputBytes(cell));
       cellMarks.push(isMarkdown ? readMarks(jupyterMetaOf(cell, custom)) : {});
     }
@@ -337,6 +359,12 @@ class MarksFile {
     this.onWrite = undefined;
     /** invalid marks files already reported */
     this.reported = new Set();
+    /** marks set but not yet written, by document URI: get() returns them */
+    this.pending = new Map();
+    /** writes run one after another, in the order set() was called */
+    this.queue = Promise.resolve();
+    /** writes waiting for typing to pause (see setSoon()), by document URI */
+    this.timers = new Map();
   }
 
   /**
@@ -426,6 +454,8 @@ class MarksFile {
 
   /** The stored marks of a document, cleaned up. */
   get(uri) {
+    const pending = this.pending.get(uri.toString());
+    if (pending) return cleanMarks(pending);
     const loc = this.location(uri);
     const all = loc && this.readForDisplay(loc.file).marks;
     const shared = all && all[loc.key];
@@ -450,9 +480,53 @@ class MarksFile {
   /**
    * Replace the marks of a document; an empty object removes them. They go to
    * the project's marks file, or to the workspace storage on this computer for
-   * documents that must stay local (see isLocal()).
+   * documents that must stay local (see isLocal()). get() returns them at
+   * once; writes are queued, so marks followed while typing (see followEdit
+   * in activate()) and marks set from a menu never overwrite each other.
    */
-  async set(uri, marks) {
+  set(uri, marks) {
+    const key = uri.toString();
+    clearTimeout(this.timers.get(key));
+    this.timers.delete(key);
+    this.pending.set(key, marks);
+    const done = this.queue.then(() => this.store(uri, marks));
+    this.queue = done.catch(() => {});
+    return done.finally(() => {
+      if (this.pending.get(key) === marks) this.pending.delete(key);
+    });
+  }
+
+  /**
+   * set(), but the write waits until edits pause for a moment, so following
+   * a heading renamed letter by letter writes the file (and asks git whether
+   * the document is ignored) once. get() returns the marks at once.
+   */
+  setSoon(uri, marks) {
+    const key = uri.toString();
+    clearTimeout(this.timers.get(key));
+    this.pending.set(key, marks);
+    this.timers.set(
+      key,
+      setTimeout(() => {
+        this.timers.delete(key);
+        if (this.pending.get(key) === marks) this.set(uri, marks).catch(() => {});
+      }, 800)
+    );
+  }
+
+  /** Write the marks still waiting in setSoon() now (when VS Code closes). */
+  flush() {
+    const waiting = [...this.timers.keys()];
+    return Promise.all(
+      waiting.map((key) => {
+        const marks = this.pending.get(key);
+        return marks ? this.set(vscode.Uri.parse(key), marks).catch(() => {}) : undefined;
+      })
+    );
+  }
+
+  /** The write behind set(). */
+  async store(uri, marks) {
     const empty = !Object.keys(marks).length;
     const loc = this.location(uri);
     const local = !empty && (await this.isLocal(uri));
@@ -630,11 +704,11 @@ class ProjectMarks {
           ? vscode.workspace.notebookDocuments.find((d) => d.uri.toString() === uri.toString())
           : vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
       const read = open ? readOpenDocument(kind, open, this.marksFile) : await this.readStored(uri, kind, markers);
-      if (!read || !read.headings.length) continue;
+      if (!read || (!read.headings.length && !read.lost.length)) continue;
       const { roots, flat } = buildDocTree(read, `${SESSION}|project|${uri.toString()}|`);
       const count = applyMarkedFilter(roots);
-      if (!count) continue;
-      out.push({ uri, kind, rel: path.relative(root, uri.fsPath).split(path.sep).join('/'), roots, flat, count });
+      if (!count && !read.lost.length) continue;
+      out.push({ uri, kind, rel: path.relative(root, uri.fsPath).split(path.sep).join('/'), roots, flat, count, lost: read.lost });
     }
     return out.sort((a, b) => a.rel.localeCompare(b.rel));
   }
@@ -809,6 +883,16 @@ function jupyterMetaOf(cell, custom = useCustomMetadata()) {
   return (holder && holder.metadata) || {};
 }
 
+/**
+ * A cell's id (nbformat 4.5 and later), or undefined. VS Code keeps it while
+ * the cell is edited or moved and gives copies and pasted cells new ones.
+ */
+function cellIdOf(cell, custom = useCustomMetadata()) {
+  const md = cell.metadata || {};
+  const holder = custom ? md.custom : md;
+  return holder && typeof holder.id === 'string' && holder.id ? holder.id : undefined;
+}
+
 /** A cell's VS Code metadata with its Jupyter metadata replaced; everything else is kept. */
 function metadataWithJupyter(cell, jupyterMeta) {
   const md = JSON.parse(JSON.stringify(cell.metadata || {}));
@@ -941,6 +1025,8 @@ class HeadingsProvider {
     this.markedCount = 0;
     /** other documents of the project with marks (see ProjectMarks.collect()) */
     this.projectFiles = [];
+    /** stored marks of the current document that match no heading (see lostMarks()) */
+    this.lost = [];
     /** while markedOnly: one node per document with marks, the current one first */
     this.fileNodes = [];
     /** the "Pinned" group shown above the headings, or undefined */
@@ -1003,11 +1089,11 @@ class HeadingsProvider {
     // grouped by document; the current document comes first.
     const files = [];
     const count = applyMarkedFilter(this.roots);
-    if (count && this.source) {
+    if ((count || this.lost.length) && this.source) {
       const uri = this.source.doc.uri;
       const root = projectRoot(this.marksFile, uri);
       const rel = root ? path.relative(root, uri.fsPath).split(path.sep).join('/') : path.basename(uri.path);
-      files.push({ uri, kind: this.source.kind, rel, roots: this.roots, flat: this.flat, count, current: true });
+      files.push({ uri, kind: this.source.kind, rel, roots: this.roots, flat: this.flat, count, lost: this.lost, current: true });
     }
     // The current document may still be listed among the others until the
     // project is read again (just after switching documents).
@@ -1025,6 +1111,23 @@ class HeadingsProvider {
       const skip = f.roots.length === 1 && first.rank === 0 && !first.star && !first.status ? first : undefined;
       const node = { ...f, file: true, id: `${SESSION}|file|${f.uri.toString()}`, counts, skip, children: skip ? skip.children : f.roots, level: 0 };
       for (const n of f.flat) n.fileNode = node;
+      if (f.lost && f.lost.length) {
+        // "Marks without a heading", last under the file.
+        const group = { lostGroup: true, id: `${node.id}|lost`, fileNode: node, visible: true, level: 0, children: [] };
+        group.children = f.lost.map(({ key, mark }) => ({
+          lostMark: true,
+          key,
+          mark,
+          text: mark.text,
+          fileNode: node,
+          parent: group,
+          id: `${group.id}|${key}`,
+          visible: true,
+          level: 0,
+          children: [],
+        }));
+        node.children = [...node.children, group];
+      }
       return node;
     });
     this.markedCount = this.fileNodes.reduce((sum, f) => sum + f.count, 0);
@@ -1050,12 +1153,14 @@ class HeadingsProvider {
       this.byId = new Map();
       this.marks = {};
       this.legacy = new Set();
+      this.lost = [];
     } else {
       const uri = src.doc.uri.toString();
       const prefix = `${SESSION}|${this.generations.get(uri) || 0}|${uri}|`;
       const read = readOpenDocument(src.kind, src.doc, this.marksFile);
       this.marks = read.marks;
       this.legacy = read.legacy;
+      this.lost = read.lost;
       ({ roots: this.roots, flat: this.flat } = buildDocTree(read, prefix));
       this.byId = new Map(this.flat.map((n) => [n.id, n]));
       // `star` is the stored name of a pin (see src/marks.js).
@@ -1104,7 +1209,8 @@ class HeadingsProvider {
   getChildren(node) {
     if (!node && this.markedOnly) return this.fileNodes;
     if (node && node.file) return node.children.filter((n) => n.visible);
-    if (node && (node.group || node.ref)) return node.children;
+    if (node && (node.group || node.ref || node.lostGroup)) return node.children;
+    if (node && node.lostMark) return [];
     const list = node ? node.children : this.roots;
     const shown = this.filtering ? list.filter((n) => n.visible) : list;
     // The Pinned group sits above the headings, except while filtering.
@@ -1113,7 +1219,8 @@ class HeadingsProvider {
 
   /** Required by TreeView.reveal(). */
   getParent(node) {
-    if (node.ref) return node.parent;
+    if (node.ref || node.lostMark) return node.parent;
+    if (node.lostGroup) return node.fileNode;
     if (node.group || node.file) return undefined;
     const file = this.markedOnly && node.fileNode;
     if (file && node.parent === file.skip) return file;
@@ -1124,6 +1231,8 @@ class HeadingsProvider {
   getTreeItem(node) {
     if (node.group) return this.groupItem(node);
     if (node.file) return this.fileItem(node);
+    if (node.lostGroup) return this.lostGroupItem(node);
+    if (node.lostMark) return this.lostItem(node);
     const ref = node.ref;
     if (ref) node = ref;
     const kind = this.markedOnly && node.fileNode ? node.fileNode.kind : this.source && this.source.kind;
@@ -1169,7 +1278,11 @@ class HeadingsProvider {
         : t('starts at line {0} · {1}', node.pos + 1, linesText(node.size)),
     ];
     if (size) lines.push(t('outputs: {0}', size));
-    if (status) lines.push(node.autoStatus ? t('Status: {0} (from the heading text)', t(status.label)) : t('Status: {0}', t(status.label)));
+    if (status) {
+      if (node.autoStatus) lines.push(t('Status: {0} (from the heading text)', t(status.label)));
+      else if (node.since) lines.push(t('Status: {0} (since {1})', t(status.label), formatDay(node.since)));
+      else lines.push(t('Status: {0}', t(status.label)));
+    }
     if (node.star) lines.push(t('Pinned'));
     const counts = countsText(node.counts);
     if (counts) lines.push(t('Marks below: {0}', counts));
@@ -1249,6 +1362,33 @@ class HeadingsProvider {
     item.tooltip = t('Pinned headings, in document order. Right-click a heading → Unpin to take it off.');
     return item;
   }
+
+  /** "Marks without a heading" under a document in Show Marked Headings. */
+  lostGroupItem(group) {
+    const item = new vscode.TreeItem(t('Marks without a heading'), vscode.TreeItemCollapsibleState.Expanded);
+    item.id = group.id;
+    item.contextValue = 'lostGroup';
+    item.iconPath = new vscode.ThemeIcon('debug-disconnect');
+    item.description = `${group.children.length}`;
+    item.tooltip = t('Their headings are no longer in the document: deleted, or renamed outside VS Code. Click one to move it to a heading, or right-click → Remove Mark.');
+    return item;
+  }
+
+  /** A mark whose heading is gone: its old heading text, status and pin. */
+  lostItem(node) {
+    const { status, since, star } = node.mark;
+    const item = new vscode.TreeItem(node.text, vscode.TreeItemCollapsibleState.None);
+    item.id = node.id;
+    item.contextValue = 'lostMark';
+    const st = status && statusById(status);
+    const parts = [st ? t(st.label) : '', since ? formatDay(since) : '', star ? t('Pinned') : ''].filter(Boolean);
+    item.description = parts.join(' · ');
+    const file = iconFile({ status, star });
+    if (file) item.iconPath = vscode.Uri.joinPath(statusIconDir, file);
+    item.tooltip = t('A mark whose heading "{0}" is no longer in {1}. Click to move it to a heading.', node.text, node.fileNode.rel);
+    item.command = { command: 'notebookHeadings.moveLostMark', title: t('Move to Heading…'), arguments: [node] };
+    return item;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1264,6 +1404,7 @@ class HeadingsProvider {
 function activate(context) {
   statusIconDir = vscode.Uri.joinPath(context.extensionUri, 'media', 'status');
   const marksFile = new MarksFile(context.workspaceState);
+  flushMarks = () => marksFile.flush();
   marksFile.onWrite = (file) => warnIfGitIgnored(file, context.workspaceState);
   const provider = new HeadingsProvider(marksFile);
   const projectMarks = new ProjectMarks(marksFile);
@@ -1372,6 +1513,119 @@ function activate(context) {
 
   // --- source tracking -------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Marks follow their headings through edits made in VS Code.
+
+  /**
+   * Headings of each document with marks as of its last edit: their texts and
+   * where each one is (its cell and its index in the cell in a notebook, its
+   * line in a Markdown file). Comparing the next edit with this tells a
+   * renamed heading from a deleted one, and an original from its copy.
+   */
+  const lastHeadings = new Map();
+  /** Heading texts of a notebook cell, for its text version (a cache). */
+  const cellHeadings = new WeakMap();
+
+  /**
+   * Heading texts of a document now, where each one is (see lastHeadings),
+   * and for notebooks the cell ids (see placesOf()).
+   */
+  const headingsNow = (kind, doc) => {
+    if (kind === 'markdown') {
+      const found = parseMarkdownHeadings(doc.getText());
+      return { texts: found.map((h) => h.text), ids: found.map((h) => h.pos), places: [] };
+    }
+    const custom = useCustomMetadata();
+    const texts = [];
+    const ids = [];
+    const places = [];
+    for (let i = 0; i < doc.cellCount; i++) {
+      const cell = doc.cellAt(i);
+      if (!isMarkdownCell(cell)) continue;
+      let known = cellHeadings.get(cell);
+      if (!known || known.version !== cell.document.version || known.first !== (i === 0)) {
+        const found = [];
+        // As parseNotebookHeadings() does, so the texts are the same.
+        scanHeadings(cell.document.getText(), (level, text) => found.push(text), { frontMatter: i === 0 });
+        known = { version: cell.document.version, first: i === 0, texts: found };
+        cellHeadings.set(cell, known);
+      }
+      const id = cellIdOf(cell, custom);
+      known.texts.forEach((text, slot) => {
+        texts.push(text);
+        ids.push({ cell, slot });
+        places.push(id ? { cell: id, k: slot } : undefined);
+      });
+    }
+    return { texts, ids, places };
+  };
+
+  /**
+   * Where each heading of a notebook went: a cell keeps its identity while
+   * it is edited or moved, and a copy or a pasted cell is a new cell; within
+   * a cell, headings are paired by alignTexts().
+   */
+  const mapNotebook = (before, now) => {
+    const byCell = (ids) => {
+      const out = new Map();
+      ids.forEach(({ cell }, i) => {
+        if (!out.has(cell)) out.set(cell, []);
+        out.get(cell).push(i);
+      });
+      return out;
+    };
+    const after = byCell(now.ids);
+    const map = new Array(before.texts.length).fill(-1);
+    for (const [cell, olds] of byCell(before.ids)) {
+      const news = after.get(cell);
+      if (!news) continue;
+      const pairs = alignTexts(olds.map((i) => before.texts[i]), news.map((j) => now.texts[j]));
+      pairs.forEach((k, a) => {
+        if (k >= 0) map[olds[a]] = news[k];
+      });
+    }
+    return map;
+  };
+
+  /** Where each heading of a Markdown file went, from the edit's changes (see followLine()). */
+  const mapMarkdown = (changes) => (before, now) => {
+    const atLine = new Map(now.ids.map((line, j) => [line, j]));
+    return before.ids.map((line) => {
+      const next = followLine(line, changes);
+      return atLine.has(next) ? atLine.get(next) : -1;
+    });
+  };
+
+  /**
+   * After an edit of a document with marks, store its marks again if a
+   * marked heading was renamed, deleted or copied (see followMarks()).
+   */
+  const followEdit = (kind, doc, mapping) => {
+    const key = doc.uri.toString();
+    try {
+      const stored = marksFile.get(doc.uri);
+      if (!Object.keys(stored).length) {
+        lastHeadings.delete(key);
+        return;
+      }
+      const before = lastHeadings.get(key);
+      const now = headingsNow(kind, doc);
+      lastHeadings.set(key, now);
+      if (!before) return;
+      const next = followMarks(stored, before.texts, now.texts, mapping(before, now), before.places, now.places);
+      if (next) marksFile.setSoon(doc.uri, next);
+    } catch {
+      // Following is a convenience: never let it stop the redraw that follows.
+      lastHeadings.delete(key);
+    }
+  };
+
+  /** Note where a document's headings are, so its next edit can be followed. */
+  const rememberHeadings = (kind, doc) => {
+    const key = doc.uri.toString();
+    if (!lastHeadings.has(key) && Object.keys(marksFile.get(doc.uri)).length) lastHeadings.set(key, headingsNow(kind, doc));
+  };
+
   /**
    * Point the tree at the active notebook or Markdown editor. When focus
    * moves somewhere without a document (the tree itself, the terminal, …)
@@ -1429,7 +1683,18 @@ function activate(context) {
   };
   // Match and mark counts change whenever the tree is rebuilt (edits, marks,
   // settings, switching documents) or the project is read again.
-  provider.afterRebuild = () => (updateFilterUi(), updateBadge());
+  let hasOpenMarks;
+  provider.afterRebuild = () => {
+    updateFilterUi();
+    updateBadge();
+    if (provider.source) rememberHeadings(provider.source.kind, provider.source.doc);
+    // Shows the Previous/Next Mark buttons only when there is somewhere to go.
+    const open = provider.flat.some((n) => isOpenStatus(n.status));
+    if (open !== hasOpenMarks) {
+      hasOpenMarks = open;
+      vscode.commands.executeCommand('setContext', 'notebookHeadings.hasOpenMarks', open);
+    }
+  };
 
   const setFilter = (q) => {
     provider.setFilter(q);
@@ -1444,7 +1709,7 @@ function activate(context) {
       return;
     }
     await refreshProject(true);
-    if (!provider.flat.some((n) => n.star || n.status) && !provider.projectFiles.length) {
+    if (!provider.flat.some((n) => n.star || n.status) && !provider.lost.length && !provider.projectFiles.length) {
       vscode.window.showInformationMessage(t('Notebook Headings: no pinned headings or statuses yet. Right-click a heading to set one.'));
       return;
     }
@@ -1463,16 +1728,36 @@ function activate(context) {
    * @param {boolean} [visible] show progress in the view (the first time)
    */
   let projectRun = 0;
+  // A background search started while a visible one (Show Marked Headings)
+  // runs would make it drop its results; it waits and runs after it instead.
+  let visibleSearch = false;
+  let searchAgain = false;
   const refreshProject = async (visible = false) => {
+    if (!visible && visibleSearch) {
+      searchAgain = true;
+      return;
+    }
     const run = ++projectRun;
     const src = provider.source;
     const background = !visible && !provider.markedOnly;
     if (!src || (background && !vscode.workspace.getWorkspaceFolder(src.doc.uri))) return provider.setProjectFiles([]);
     const work = () => projectMarks.collect(src.doc.uri).catch(() => []);
-    const files = visible
-      ? await vscode.window.withProgress({ location: { viewId: VIEW_ID }, title: t('Looking for marks in the project…') }, work)
-      : await work();
+    let files;
+    if (visible) {
+      visibleSearch = true;
+      try {
+        files = await vscode.window.withProgress({ location: { viewId: VIEW_ID }, title: t('Looking for marks in the project…') }, work);
+      } finally {
+        visibleSearch = false;
+      }
+    } else {
+      files = await work();
+    }
     if (run === projectRun && provider.source === src) provider.setProjectFiles(files);
+    if (visible && searchAgain) {
+      searchAgain = false;
+      refreshProjectSoon();
+    }
   };
   const refreshProjectSoon = debounce(() => refreshProject(), 400);
   const liveFilter = debounce(setFilter, 120);
@@ -1505,7 +1790,8 @@ function activate(context) {
    * Scroll the document so the heading is at the top and select it.
    * @param {object} node
    * @param {boolean} focusEditor move keyboard focus to the editor (used by
-   *        Go to Heading; tree clicks keep focus in the tree)
+   *        Go to Heading and Go to Next/Previous Mark, which also select the
+   *        heading in the tree; tree clicks keep focus in the tree)
    */
   const revealHeading = async (node, focusEditor = false) => {
     const src = provider.source;
@@ -1538,6 +1824,10 @@ function activate(context) {
       editor.selection = new vscode.Selection(at, at);
       editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.AtTop);
     }
+    // Not a tree click: select the heading there too (following the cursor
+    // skips it, as it was just revealed).
+    const shown = focusEditor && view.visible && provider.visibleHeadingFor(node);
+    if (shown) view.reveal(shown, { select: true, focus: false, expand: false }).then(undefined, () => {});
   };
 
   /**
@@ -1888,8 +2178,11 @@ function activate(context) {
    *
    * @param {object[]} nodes
    * @param {{ status?: string|null, star?: boolean }} patch see updateMarks()
+   * @param {{ since?: string, drop?: string }} [options] `since`: the date of
+   *        a new status (default today); `drop`: the key of a mark without a
+   *        heading to remove at the same time (it was moved to `nodes`)
    */
-  const setMarks = async (nodes, patch) => {
+  const setMarks = async (nodes, patch, options = {}) => {
     const src = provider.source;
     if (!src || !nodes.length) return false;
     const texts = provider.flat.map((h) => h.text);
@@ -1901,9 +2194,14 @@ function activate(context) {
     for (const [i, mark] of Object.entries(provider.marks)) {
       if (!provider.legacy.has(Number(i)) || touched.has(provider.flat[i].pos)) marks[i] = mark;
     }
-    for (const n of nodes) marks = updateMarks(marks, texts, n.slot, patch);
+    // Marks without a heading stay, under keys past the headings.
+    let free = texts.length;
+    for (const { key, mark } of provider.lost) if (key !== options.drop) marks[free++] = mark;
+    const places = placesOf(provider.flat);
+    for (const n of nodes) marks = updateMarks(marks, texts, n.slot, patch, places, options.since || today());
     try {
       await marksFile.set(src.doc.uri, marks);
+      rememberHeadings(src.kind, src.doc);
     } catch (err) {
       vscode.window.showErrorMessage(t('Notebook Headings: could not save the marks ({0}).', err.message));
       return false;
@@ -1924,6 +2222,121 @@ function activate(context) {
     scheduleRebuild.cancel();
     provider.rebuild();
     return true;
+  };
+
+  /**
+   * Go to Next / Previous Mark: the next (or previous) heading of the current
+   * document that is still to do, in progress or to check, counted from the
+   * section the cursor is in; past the last one it starts over.
+   */
+  const goToMark = async (step) => {
+    const src = provider.source;
+    const open = provider.flat.filter((n) => isOpenStatus(n.status));
+    if (!src || !open.length) {
+      vscode.window.showInformationMessage(t('Notebook Headings: no heading here is to do, in progress or to check.'));
+      return;
+    }
+    const here = headingFor(cursorPos(src));
+    const at = here ? provider.flat.indexOf(here) : -1;
+    const ahead = step > 0 ? open.filter((n) => provider.flat.indexOf(n) > at) : open.filter((n) => provider.flat.indexOf(n) < at).reverse();
+    let target = ahead[0];
+    if (!target) {
+      target = step > 0 ? open[0] : open[open.length - 1];
+      vscode.window.setStatusBarMessage(step > 0 ? t('Notebook Headings: back to the first mark') : t('Notebook Headings: back to the last mark'), 3000);
+    }
+    await revealHeading(target, true);
+  };
+
+  /**
+   * Copy Marks as Checklist: every heading with a status in the project, as
+   * a Markdown checklist grouped by document (finished ones ticked), to paste
+   * into notes or a to-do app.
+   */
+  const copyChecklist = async () => {
+    if (!provider.source) {
+      vscode.window.showInformationMessage(t('Notebook Headings: open a notebook or Markdown file first.'));
+      return;
+    }
+    await refreshProject(true);
+    const current = provider.source.doc.uri.toString();
+    const root = projectRoot(marksFile, provider.source.doc.uri);
+    const here = root ? path.relative(root, provider.source.doc.uri.fsPath).split(path.sep).join('/') : path.basename(provider.source.doc.uri.path);
+    const files = [{ rel: here, flat: provider.flat }, ...provider.projectFiles.filter((f) => f.uri.toString() !== current)];
+    const blocks = [];
+    let count = 0;
+    for (const f of files) {
+      const lines = f.flat
+        .filter((n) => n.status)
+        .map((n) => {
+          const st = statusById(n.status);
+          const since = n.since ? ` · ${t('since {0}', formatDay(n.since))}` : '';
+          return `- [${n.status === 'done' ? 'x' : ' '}] ${label(n)} · ${t(st.label)}${since}`;
+        });
+      if (!lines.length) continue;
+      count += lines.length;
+      blocks.push([`## ${f.rel}`, '', ...lines].join('\n'));
+    }
+    if (!count) {
+      vscode.window.showInformationMessage(t('Notebook Headings: no heading in this project has a status yet.'));
+      return;
+    }
+    await vscode.env.clipboard.writeText(blocks.join('\n\n') + '\n');
+    vscode.window.showInformationMessage(count === 1 ? t('Copied 1 heading as a checklist.') : t('Copied {0} headings as a checklist.', count));
+  };
+
+  /** Open the document of a mark without a heading, so the tree shows it. */
+  const openDocumentOf = async (fileNode) => {
+    if (!fileNode.current) {
+      if (fileNode.kind === 'notebook') await vscode.window.showNotebookDocument(await vscode.workspace.openNotebookDocument(fileNode.uri));
+      else await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fileNode.uri));
+      track();
+    }
+    return provider.source && provider.source.doc.uri.toString() === fileNode.uri.toString();
+  };
+
+  /**
+   * "Move to Heading…" on a mark without a heading: pick the heading that
+   * should have it (`target` skips the list; for tests).
+   */
+  const moveLostMark = async (node, target) => {
+    if (!node || !node.lostMark) return;
+    const { mark, key } = node;
+    if (!(await openDocumentOf(node.fileNode))) return;
+    if (target) {
+      const patch = { ...(mark.status ? { status: mark.status } : {}), ...(mark.star ? { star: true } : {}) };
+      await setMarks([target], patch, { since: mark.since, drop: key });
+      return;
+    }
+    const top = Math.min(...provider.flat.map((n) => n.level));
+    const items = provider.flat.map((n) => ({
+      label: `${'  '.repeat(n.level - top)}${label(n)}`,
+      description: n.status ? t(statusById(n.status).label) : '',
+      node: n,
+    }));
+    const pick = await vscode.window.showQuickPick(items, {
+      placeHolder: t('Move the mark of "{0}" to…', truncate(mark.text, 40)),
+      matchOnDescription: true,
+    });
+    if (!pick) return;
+    const patch = { ...(mark.status ? { status: mark.status } : {}), ...(mark.star ? { star: true } : {}) };
+    await setMarks([pick.node], patch, { since: mark.since, drop: key });
+    refreshProjectSoon();
+  };
+
+  /** "Remove Mark" on a mark without a heading. */
+  const removeLostMark = async (node) => {
+    if (!node || !node.lostMark) return;
+    const { uri } = node.fileNode;
+    const stored = marksFile.get(uri);
+    delete stored[node.key];
+    try {
+      await marksFile.set(uri, stored);
+    } catch (err) {
+      vscode.window.showErrorMessage(t('Notebook Headings: could not save the marks ({0}).', err.message));
+      return;
+    }
+    if (node.fileNode.current) provider.rebuild();
+    refreshProject(provider.markedOnly);
   };
 
   const headingsText = (nodes) =>
@@ -1947,10 +2360,13 @@ function activate(context) {
     else await setMarks(nodes, { status: pick.id });
   };
 
-  /** "Set Status…": TODO, In progress, To check or Finished. */
+  /**
+   * "Set Status…": TODO, In progress, To check or Finished, and Clear Status
+   * when a selected heading has a status that was set (as in Clear Status).
+   */
   const setStatus = async (node, selected) => {
     const nodes = targetsOf(node, selected);
-    if (provider.source && nodes.length) await pickStatus(nodes, false);
+    if (provider.source && nodes.length) await pickStatus(nodes, nodes.some((n) => n.status && !n.autoStatus));
   };
 
   /** "Clear Status" (shown only on headings with a status that was set). */
@@ -2076,11 +2492,21 @@ function activate(context) {
       // Tags changed by undo/redo, another extension or a reverted file:
       // redraw the Tags buttons so their counts stay right.
       if (e.cellChanges.some((c) => c.metadata)) tagButton.refresh();
+      if (e.contentChanges.length || e.cellChanges.some((c) => c.document && isMarkdownCell(c.cell))) {
+        followEdit('notebook', e.notebook, mapNotebook);
+      }
       if (isSourceDoc(e.notebook)) scheduleRebuild();
     }),
     vscode.workspace.onDidChangeTextDocument((e) => {
-      if (isSourceDoc(e.document)) scheduleRebuild();
+      const doc = e.document;
+      if (e.contentChanges.length && doc.languageId === 'markdown' && doc.uri.scheme !== 'vscode-notebook-cell') {
+        const changes = e.contentChanges.map((c) => ({ start: c.range.start, end: c.range.end, text: c.text }));
+        followEdit('markdown', doc, mapMarkdown(changes));
+      }
+      if (isSourceDoc(doc)) scheduleRebuild();
     }),
+    vscode.workspace.onDidCloseNotebookDocument((doc) => lastHeadings.delete(doc.uri.toString())),
+    vscode.workspace.onDidCloseTextDocument((doc) => lastHeadings.delete(doc.uri.toString())),
 
     // Marks live in .vscode/notebook-headings.json: move them along with
     // renamed documents, and redraw when that file changes on disk (another
@@ -2121,6 +2547,11 @@ function activate(context) {
     vscode.commands.registerCommand('notebookHeadings.quickJump', quickJump),
     vscode.commands.registerCommand('notebookHeadings.filter', promptFilter),
     vscode.commands.registerCommand('notebookHeadings.clearFilter', () => setFilter('')),
+    vscode.commands.registerCommand('notebookHeadings.nextMark', () => goToMark(1)),
+    vscode.commands.registerCommand('notebookHeadings.previousMark', () => goToMark(-1)),
+    vscode.commands.registerCommand('notebookHeadings.copyChecklist', copyChecklist),
+    vscode.commands.registerCommand('notebookHeadings.moveLostMark', moveLostMark),
+    vscode.commands.registerCommand('notebookHeadings.removeLostMark', removeLostMark),
     vscode.commands.registerCommand('notebookHeadings.togglePosition', () =>
       config().update('showPosition', !setting('showPosition', false), vscode.ConfigurationTarget.Global)
     ),
@@ -2159,9 +2590,15 @@ function activate(context) {
   updateFilterUi();
 
   // Internals for the integration tests in test/integration/ (not an API).
-  return { __test: { provider, view, status, marksFile, revealHeading, setMarks, clearOutputs, fixGitIgnore, refreshProject } };
+  return { __test: { provider, view, status, marksFile, revealHeading, setMarks, clearOutputs, fixGitIgnore, refreshProject, moveLostMark, removeLostMark } };
 }
 
-function deactivate() {}
+/** Writes marks still waiting to be saved (set by activate()). */
+let flushMarks = () => undefined;
+
+/** VS Code waits for the returned promise: followed marks are not lost on quit. */
+function deactivate() {
+  return flushMarks();
+}
 
 module.exports = { activate, deactivate };

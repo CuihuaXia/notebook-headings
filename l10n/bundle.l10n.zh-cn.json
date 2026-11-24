@@ -90,5 +90,18 @@
   "Notebook Headings: this cell has no heading.": "Notebook Headings：这个 cell 里没有标题。",
   "Which heading?": "哪个标题？",
   "starts at cell {0} · {1}": "从第 {0} 个 cell 开始 · {1}",
-  "starts at line {0} · {1}": "从第 {0} 行开始 · {1}"
+  "starts at line {0} · {1}": "从第 {0} 行开始 · {1}",
+  "A mark whose heading \"{0}\" is no longer in {1}. Click to move it to a heading.": "这个标记原来的标题\"{0}\"已不在 {1} 里。点击可以把它移到某个标题上。",
+  "Copied 1 heading as a checklist.": "已把 1 个标题复制成清单。",
+  "Copied {0} headings as a checklist.": "已把 {0} 个标题复制成清单。",
+  "Marks without a heading": "找不到标题的标记",
+  "Move the mark of \"{0}\" to…": "把\"{0}\"的标记移到…",
+  "Move to Heading…": "移到标题…",
+  "Notebook Headings: back to the first mark": "Notebook Headings：已回到第一个标记",
+  "Notebook Headings: back to the last mark": "Notebook Headings：已回到最后一个标记",
+  "Notebook Headings: no heading here is to do, in progress or to check.": "Notebook Headings：这个文件里没有待做、进行中或待核对的标题。",
+  "Notebook Headings: no heading in this project has a status yet.": "Notebook Headings：这个项目里还没有设置过状态的标题。",
+  "Status: {0} (since {1})": "状态：{0}（{1} 起）",
+  "Their headings are no longer in the document: deleted, or renamed outside VS Code. Click one to move it to a heading, or right-click → Remove Mark.": "这些标记原来的标题已不在文档里：被删除了，或在 VS Code 外改了名。点击一个可以把它移到某个标题上，或者右键 → 删除标记。",
+  "since {0}": "{0} 起"
 }

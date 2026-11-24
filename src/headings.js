@@ -183,11 +183,11 @@ function scanHeadings(text, onHeading, { frontMatter = false } = {}) {
 /**
  * The cells of a notebook read from its .ipynb text, for notebooks that are
  * not open in VS Code: whether each is Markdown, its text (empty for code
- * cells, which are never parsed) and its Jupyter metadata. A file that is not
- * a valid notebook gives no cells.
+ * cells, which are never parsed), its Jupyter metadata and its id (nbformat
+ * 4.5 and later). A file that is not a valid notebook gives no cells.
  *
  * @param {string} json contents of an .ipynb file
- * @returns {{ isMarkdown: boolean, text: string, meta: object }[]}
+ * @returns {{ isMarkdown: boolean, text: string, meta: object, id?: string }[]}
  */
 function notebookCellsFromJson(json) {
   let nb;
@@ -204,6 +204,7 @@ function notebookCellsFromJson(json) {
       isMarkdown,
       text: isMarkdown ? join(c.source) : '',
       meta: (c && typeof c.metadata === 'object' && c.metadata) || {},
+      id: c && typeof c.id === 'string' && c.id ? c.id : undefined,
     };
   });
 }
@@ -213,17 +214,19 @@ function notebookCellsFromJson(json) {
  * position is the index of the cell that contains it, and its slot is its
  * index among the headings of that cell (0 for the first), which is how its
  * marks are stored (see src/marks.js). A YAML front matter block at the top
- * of the first cell (MyST notebooks) is ignored, as in Markdown files.
+ * of the first cell (MyST notebooks) is ignored, as in Markdown files. A
+ * heading of a cell with an id carries it as `cellId`.
  *
- * @param {{ isMarkdown: boolean, text: string }[]} cells all cells, in order
- * @returns {{ level: number, text: string, pos: number, slot: number }[]}
+ * @param {{ isMarkdown: boolean, text: string, id?: string }[]} cells all cells, in order
+ * @returns {{ level: number, text: string, pos: number, slot: number, cellId?: string }[]}
  */
 function parseNotebookHeadings(cells) {
   const headings = [];
   cells.forEach((cell, index) => {
     if (!cell.isMarkdown) return;
     let slot = 0;
-    const onHeading = (level, text) => headings.push({ level, text, pos: index, slot: slot++ });
+    const onHeading = (level, text) =>
+      headings.push({ level, text, pos: index, slot: slot++, ...(cell.id ? { cellId: cell.id } : {}) });
     scanHeadings(cell.text, onHeading, { frontMatter: index === 0 });
   });
   return headings;

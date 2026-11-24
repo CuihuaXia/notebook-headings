@@ -43,6 +43,13 @@ async function openNotebook(name) {
 /** Wait for the debounced rebuild after an edit. */
 const rebuilt = () => sleep(600);
 
+/** A fresh copy of an example file in the workspace, for tests that change it. */
+function freshCopy(example, name) {
+  const ext = vscode.extensions.getExtension('cuihuaxia.notebook-headings');
+  fs.copyFileSync(path.join(ext.extensionPath, 'examples', example), file(name).fsPath);
+  return name;
+}
+
 const tests = [
   [
     'Markdown: jumping to a heading shows it in the status bar (scroll does not override it)',
@@ -256,7 +263,8 @@ const tests = [
       assert.equal(node('Model').star, true);
       assert.equal(provider().starGroup.children.length, 1);
       const saved = readMarksFile().marks['sample.md'];
-      assert.deepEqual(Object.values(saved), [{ star: true, status: 'todo', text: 'Model' }]);
+      assert.deepEqual(Object.values(saved).map(({ since, ...rest }) => rest), [{ star: true, status: 'todo', text: 'Model' }]);
+      assert.match(Object.values(saved)[0].since, /^\d{4}-\d{2}-\d{2}$/, 'dated');
       // Insert a heading above: the mark stays on "Model".
       const edit = new vscode.WorkspaceEdit();
       const at = doc.getText().split('\n').findIndex((l) => l.startsWith('## Setup'));
@@ -311,7 +319,7 @@ const tests = [
       assert.equal(JSON.stringify(nb.cellAt(node('Means').pos).metadata), metaBefore, 'the notebook is not changed');
       assert.equal(nb.isDirty, false);
       const entry = JSON.parse(fs.readFileSync(marksFile, 'utf8')).marks['sample.ipynb'];
-      assert.deepEqual(Object.values(entry), [{ status: 'question', text: 'Means' }]);
+      assert.deepEqual(Object.values(entry).map(({ since, ...rest }) => rest), [{ status: 'question', text: 'Means', cell: 'cell-8', k: 1 }], 'with its cell id and place in the cell');
       // A heading added above it in the same cell does not move the mark.
       const edit = new vscode.WorkspaceEdit();
       edit.insert(cell.document.uri, new vscode.Position(0, 0), '### Inserted\n\n');
@@ -321,6 +329,224 @@ const tests = [
       assert.equal(node('Inserted').status, undefined);
       assert.equal(node('Summary').status, undefined);
       await api.setMarks([node('Means')], { status: null });
+    },
+  ],
+  [
+    'Notebook: a mark follows its heading when renamed, stays off copies, and goes away with its cell',
+    async () => {
+      const nb = await openNotebook(freshCopy('sample.ipynb', 'follow.ipynb'));
+      const marksFile = file(path.join('.vscode', 'notebook-headings.json')).fsPath;
+      const saved = () => Object.values(JSON.parse(fs.readFileSync(marksFile, 'utf8')).marks['follow.ipynb'] || {});
+      const statuses = (text) => provider().flat.filter((n) => n.text === text).map((n) => n.status);
+      const todos = () => provider().flat.filter((n) => n.status === 'todo').map((n) => `${n.pos}:${n.text}`);
+      const md = (text) => new vscode.NotebookCellData(vscode.NotebookCellKind.Markup, text, 'markdown');
+      const edit = async (...edits) => {
+        const e = new vscode.WorkspaceEdit();
+        e.set(nb.uri, edits);
+        await vscode.workspace.applyEdit(e);
+        await rebuilt();
+      };
+      try {
+        const pos = node('Read data').pos;
+        assert.ok(await api.setMarks([node('Read data')], { status: 'todo' }));
+        assert.equal(node('Setup').counts.todo, 1);
+        // Renamed: the mark stays, and the marks file learns the new text.
+        const rename = new vscode.WorkspaceEdit();
+        const cellDoc = nb.cellAt(pos).document;
+        rename.replace(cellDoc.uri, cellDoc.lineAt(0).range, '### Read raw data');
+        await vscode.workspace.applyEdit(rename);
+        await rebuilt();
+        assert.deepEqual(todos(), [`${pos}:Read raw data`]);
+        await until(() => saved().some((m) => m.text === 'Read raw data'), 'the new text in the marks file');
+        // A copy pasted above it: the original (now one cell lower) keeps it.
+        await edit(vscode.NotebookEdit.insertCells(pos, [md('### Read raw data')]));
+        assert.deepEqual(statuses('Read raw data'), [undefined, 'todo']);
+        assert.deepEqual(todos(), [`${pos + 1}:Read raw data`]);
+        // The copy deleted again: still on the original.
+        await edit(vscode.NotebookEdit.deleteCells(new vscode.NotebookRange(pos, pos + 1)));
+        assert.deepEqual(todos(), [`${pos}:Read raw data`]);
+        // The marked cell deleted: no other heading takes the mark, and the
+        // parent's summary drops it.
+        await edit(vscode.NotebookEdit.deleteCells(new vscode.NotebookRange(pos, pos + 1)));
+        assert.deepEqual(todos(), []);
+        assert.equal(node('Setup').counts.todo, undefined);
+        // Pasted back (cut and paste): the mark comes back with it.
+        await edit(vscode.NotebookEdit.insertCells(pos, [md('### Read raw data')]));
+        assert.deepEqual(todos(), [`${pos}:Read raw data`]);
+      } finally {
+        await api.setMarks(provider().flat.filter((n) => n.status === 'todo'), { status: null });
+        await vscode.commands.executeCommand('workbench.action.files.revert');
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        fs.rmSync(file('follow.ipynb').fsPath, { force: true });
+      }
+    },
+  ],
+  [
+    'Notebook: marks follow the cell id, through renames made on disk and VS Code copy, cut and paste',
+    async () => {
+      const nb = await openNotebook(freshCopy('sample.ipynb', 'ids.ipynb'));
+      const nbPath = file('ids.ipynb').fsPath;
+      const marksPath = file(path.join('.vscode', 'notebook-headings.json')).fsPath;
+      const entries = () => Object.values(JSON.parse(fs.readFileSync(marksPath, 'utf8')).marks['ids.ipynb'] || {});
+      const todos = () => provider().flat.filter((n) => n.status === 'todo').map((n) => `${n.pos}:${n.text}`);
+      // VS Code gives a pasted cell its own id a moment after the paste.
+      const expect = (want, what) => until(() => JSON.stringify(todos()) === JSON.stringify(want), `${what}: ${JSON.stringify(want)}, got ${JSON.stringify(todos())}`);
+      const run = async (cell, command) => {
+        vscode.window.activeNotebookEditor.selections = [new vscode.NotebookRange(cell, cell + 1)];
+        await vscode.commands.executeCommand(command);
+        await rebuilt();
+      };
+      const remove = async (from, to) => {
+        const e = new vscode.WorkspaceEdit();
+        e.set(nb.uri, [vscode.NotebookEdit.deleteCells(new vscode.NotebookRange(from, to))]);
+        await vscode.workspace.applyEdit(e);
+        await rebuilt();
+      };
+      try {
+        const pos = node('Read data').pos;
+        assert.ok(await api.setMarks([node('Read data')], { status: 'todo' }));
+        assert.deepEqual(entries().map((e) => e.cell), [`cell-${pos}`], 'the cell id is stored');
+        // Renamed on disk, with a cell added above (as a git pull would), while
+        // the notebook is open: the cell id keeps the mark.
+        const data = JSON.parse(fs.readFileSync(nbPath, 'utf8'));
+        data.cells[pos].source = ['### Read input'];
+        data.cells.splice(1, 0, { cell_type: 'markdown', id: 'added', metadata: {}, source: ['## Intro'] });
+        fs.writeFileSync(nbPath, JSON.stringify(data, null, 1));
+        await until(() => node('Read input'), 'the notebook reloaded from disk', 10000);
+        await rebuilt();
+        const at = pos + 1;
+        await expect([`${at}:Read input`], 'marks');
+        await until(() => entries().some((e) => e.text === 'Read input'), 'the new text in the marks file');
+        // Copies made by VS Code get new ids and no mark, below or above.
+        await run(at, 'notebook.cell.copy');
+        await run(at, 'notebook.cell.paste');
+        await run(at, 'notebook.cell.copyDown');
+        await expect([`${at}:Read input`], 'copies below');
+        await run(at - 1, 'notebook.cell.paste');
+        await expect([`${at + 1}:Read input`], 'a copy above');
+        await remove(at + 2, at + 4);
+        await remove(at, at + 1);
+        await expect([`${at}:Read input`], 'copies deleted');
+        // Cut and paste elsewhere: the pasted cell has a new id; the text finds it.
+        await run(at, 'notebook.cell.cut');
+        await expect([], 'marks');
+        await run(0, 'notebook.cell.paste');
+        await expect(['1:Read input'], 'marks');
+      } finally {
+        await api.setMarks(provider().flat.filter((n) => n.status === 'todo'), { status: null });
+        await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+        fs.rmSync(nbPath, { force: true });
+      }
+    },
+  ],
+  [
+    'Statuses are dated; Next/Previous Mark, the checklist and marks without a heading',
+    async () => {
+      const nb = await openNotebook(freshCopy('sample.ipynb', 'more.ipynb'));
+      const marksPath = file(path.join('.vscode', 'notebook-headings.json')).fsPath;
+      const entries = () => Object.values(JSON.parse(fs.readFileSync(marksPath, 'utf8')).marks['more.ipynb'] || {});
+      const today = new Date();
+      const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const cell = () => vscode.window.activeNotebookEditor.selection.start;
+      try {
+        assert.ok(await api.setMarks([node('Read data')], { status: 'todo' }));
+        assert.ok(await api.setMarks([node('Spread')], { status: 'question' }));
+        assert.ok(await api.setMarks([node('Results')], { status: 'done' }));
+        assert.equal(entries().find((e) => e.text === 'Read data').since, iso, 'a new status is dated');
+        assert.match(provider().getTreeItem(node('Read data')).tooltip, /since/);
+        // Next / Previous Mark: open statuses only (Finished is skipped), and around.
+        await vscode.commands.executeCommand('notebookHeadings.view.focus');
+        await until(() => api.view.visible, 'the headings view');
+        await api.revealHeading(node('Setup'));
+        await vscode.commands.executeCommand('notebookHeadings.nextMark');
+        await until(() => cell() === node('Read data').pos, 'the next mark');
+        // The tree selects it too (or its visible parent, if collapsed).
+        const selected = () => api.view.selection.length === 1 && api.view.selection[0].text;
+        await until(() => selected() === provider().visibleHeadingFor(node('Read data')).text, 'the tree to follow');
+        await vscode.commands.executeCommand('notebookHeadings.nextMark');
+        await until(() => cell() === node('Spread').pos, 'the one after');
+        assert.notEqual(provider().visibleHeadingFor(node('Spread')).text, provider().visibleHeadingFor(node('Read data')).text);
+        await until(() => selected() === provider().visibleHeadingFor(node('Spread')).text, 'the tree to follow again');
+        await vscode.commands.executeCommand('notebookHeadings.nextMark');
+        await until(() => cell() === node('Read data').pos, 'back to the first');
+        await vscode.commands.executeCommand('notebookHeadings.previousMark');
+        await until(() => cell() === node('Spread').pos, 'previous: around to the last');
+        // Copy Marks as Checklist: every status, finished ones ticked, by file.
+        await vscode.commands.executeCommand('notebookHeadings.copyChecklist');
+        const list = await vscode.env.clipboard.readText();
+        assert.match(list, /^## more\.ipynb$/m);
+        assert.match(list, /^- \[ \] 1\.2  Read data · TODO · since /m);
+        assert.match(list, /^- \[x\] 3  Results · Finished/m);
+        // The marked cell deleted: its mark is listed under "Marks without a heading".
+        const e = new vscode.WorkspaceEdit();
+        e.set(nb.uri, [vscode.NotebookEdit.deleteCells(new vscode.NotebookRange(node('Read data').pos, node('Read data').pos + 1))]);
+        await vscode.workspace.applyEdit(e);
+        await rebuilt();
+        assert.deepEqual(provider().lost.map((l) => l.mark.text), ['Read data']);
+        assert.ok(await api.setMarks([node('Setup')], { star: true }), 'setting another mark keeps it');
+        assert.deepEqual(provider().lost.map((l) => l.mark.text), ['Read data']);
+        await vscode.commands.executeCommand('notebookHeadings.showMarked');
+        const fileNode = provider().fileNodes.find((f) => f.current);
+        const group = provider().getChildren(fileNode).find((n) => n.lostGroup);
+        assert.ok(group, 'the group is shown');
+        const [lostNode] = provider().getChildren(group);
+        assert.equal(provider().getTreeItem(lostNode).contextValue, 'lostMark');
+        // Moved to another heading: it keeps its status and date; the lost entry is gone.
+        await api.moveLostMark(lostNode, node('Load libraries'));
+        assert.equal(node('Load libraries').status, 'todo');
+        assert.deepEqual(provider().lost, []);
+        assert.equal(entries().find((x) => x.text === 'Load libraries').since, iso);
+        // Removed: gone from the file.
+        e.set(nb.uri, [vscode.NotebookEdit.deleteCells(new vscode.NotebookRange(node('Load libraries').pos, node('Load libraries').pos + 1))]);
+        await vscode.workspace.applyEdit(e);
+        await rebuilt();
+        await vscode.commands.executeCommand('notebookHeadings.showMarked');
+        const again = provider().getChildren(provider().getChildren(provider().fileNodes.find((f) => f.current)).find((n) => n.lostGroup))[0];
+        await api.removeLostMark(again);
+        assert.equal(entries().some((x) => x.text === 'Load libraries'), false);
+      } finally {
+        if (provider().markedOnly) await vscode.commands.executeCommand('notebookHeadings.clearFilter');
+        await api.setMarks(provider().flat.filter((n) => n.status || n.star), { status: null, star: false });
+        await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+        const left = JSON.parse(fs.readFileSync(marksPath, 'utf8'));
+        delete left.marks['more.ipynb'];
+        fs.writeFileSync(marksPath, JSON.stringify(left, null, 2) + '\n');
+        fs.rmSync(file('more.ipynb').fsPath, { force: true });
+      }
+    },
+  ],
+  [
+    'Markdown: a mark follows its heading when renamed or moved down, and goes away with its line',
+    async () => {
+      fs.writeFileSync(file('follow.md').fsPath, '# Doc\n\n## Analysis\n\n### Load data\n\n### Model\n\n## Results\n');
+      const doc = await openMarkdown('follow.md');
+      const todos = () => provider().flat.filter((n) => n.status === 'todo').map((n) => `${n.pos}:${n.text}`);
+      const lineOf = (text) => doc.getText().split('\n').findIndex((l) => l === text);
+      const change = async (fn) => {
+        const e = new vscode.WorkspaceEdit();
+        fn(e);
+        await vscode.workspace.applyEdit(e);
+        await rebuilt();
+      };
+      try {
+        assert.ok(await api.setMarks([node('Model')], { status: 'todo' }));
+        let at = lineOf('### Model');
+        await change((e) => e.replace(doc.uri, new vscode.Range(at, 4, at, 9), 'Final model'));
+        assert.deepEqual(todos(), [`${at}:Final model`], 'renamed in place');
+        await change((e) => e.insert(doc.uri, new vscode.Position(at, 0), '\n'));
+        assert.deepEqual(todos(), [`${at + 1}:Final model`], 'Enter at the start of its line');
+        at = lineOf('### Final model');
+        await change((e) => e.insert(doc.uri, new vscode.Position(at, 0), '### Final model\n\n'));
+        assert.deepEqual(todos(), [`${at + 2}:Final model`], 'a copy pasted above does not take it');
+        await change((e) => e.delete(doc.uri, new vscode.Range(at + 2, 0, at + 3, 0)));
+        assert.deepEqual(todos(), [], 'deleted: not even the copy with the same text takes it');
+        assert.equal(node('Analysis').counts.todo, undefined);
+      } finally {
+        await api.setMarks(provider().flat.filter((n) => n.status === 'todo'), { status: null });
+        await vscode.commands.executeCommand('workbench.action.files.revert');
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        fs.rmSync(file('follow.md').fsPath, { force: true });
+      }
     },
   ],
   [

@@ -12,11 +12,13 @@
  * documents themselves are never changed. Each file's entry maps a heading's
  * index in the file to its mark, saved with the heading's text:
  *
- *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "star": true, "text": "Setup" } } } }
+ *     { "marks": { "code/Analysis.ipynb": { "4": { "status": "todo", "star": true, "text": "Setup", "cell": "a1b2c3d4" } } } }
  *
+ * `cell` is the id of the notebook cell holding the heading (nbformat 4.5),
+ * the surest way to find it again (see matchMarks()).
  * The text keeps a mark on its heading when headings are added or removed
- * above it; the index keeps it when the heading is renamed (see
- * resolveMarks()).
+ * above it (see matchMarks()); renames and copies made in VS Code are
+ * followed as they happen (see followMarks()).
  *
  * Version 1.5 kept notebook marks in the Jupyter metadata of the heading's
  * cell instead, under MARKS_KEY, keyed by the heading's index within the cell.
@@ -54,10 +56,13 @@ const statusById = (id) => STATUSES.find((s) => s.id === id);
 
 /**
  * A marks object (heading slot -> mark) cleaned up: unknown statuses and
- * malformed entries are dropped. `text` is kept when present.
+ * malformed entries are dropped. `text`, `n` (occurrence), `cell` (the id of
+ * the notebook cell holding the heading), `k` (the heading's index in that
+ * cell) and `since` (the day its status was set, YYYY-MM-DD) are kept when
+ * valid.
  *
  * @param {*} raw
- * @returns {Object<string, { status?: string, star?: boolean, text?: string }>}
+ * @returns {Object<string, { status?: string, star?: boolean, text?: string, n?: number, cell?: string, k?: number, since?: string }>}
  */
 function cleanMarks(raw) {
   const out = {};
@@ -70,6 +75,9 @@ function cleanMarks(raw) {
     if (!Object.keys(mark).length) continue;
     if (typeof m.text === 'string') mark.text = m.text;
     if (Number.isInteger(m.n) && m.n > 0) mark.n = m.n;
+    if (typeof m.cell === 'string' && m.cell && m.cell.length <= 100) mark.cell = m.cell;
+    if (Number.isInteger(m.k) && m.k > 0) mark.k = m.k;
+    if (mark.status && typeof m.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.since)) mark.since = m.since;
     out[slot] = mark;
   }
   return out;
@@ -101,31 +109,93 @@ function occurrences(texts) {
   });
 }
 
+/** A mark without its text and place: what a heading shows (status, since when, pin). */
+const stripMark = ({ status, since, star }) => ({
+  ...(status ? { status, ...(since ? { since } : {}) } : {}),
+  ...(star ? { star } : {}),
+});
+
+/**
+ * Where each notebook heading is, for matching marks by cell id: `{ cell, k }`
+ * with the id of its cell (nbformat 4.5 and later; Jupyter, VS Code and git
+ * keep it through edits and moves, a copy gets a new one) and its index in the
+ * cell, or undefined when the cell has no id.
+ *
+ * @param {{ cellId?: string, cellSlot?: number }[]} headings
+ * @returns {({ cell: string, k: number } | undefined)[]}
+ */
+const placesOf = (headings) => headings.map((h) => (h.cellId ? { cell: h.cellId, k: h.cellSlot || 0 } : undefined));
+
+/**
+ * A mark as stored for heading `i`: with the heading's text, its occurrence
+ * when another heading before it has the same text, and its cell id and
+ * index in the cell when known.
+ */
+function entryFor(mark, i, texts, occ, places) {
+  const p = places[i];
+  return {
+    ...stripMark(mark),
+    text: texts[i],
+    ...(occ[i] ? { n: occ[i] } : {}),
+    ...(p ? { cell: p.cell, ...(p.k ? { k: p.k } : {}) } : {}),
+  };
+}
+
 /**
  * Match stored marks to the headings a container (a notebook or a Markdown
- * file) holds now. A mark is saved with its heading's text and, when several
+ * file) holds now. A mark saved with a cell id goes to the heading in that
+ * cell — at the same index in the cell with the same text, else with the same
+ * text, else at the same index — whatever happened to the text, so a heading
+ * renamed anywhere (another editor, a `git pull`) keeps its mark. Otherwise
+ * (no id, or the cell is gone: cut and paste gives the pasted cell a new id)
+ * the text decides. A mark is saved with its heading's text and, when several
  * headings share that text, which of them it is (`n`: 0 = the first). It goes
  * to the heading with that text and occurrence, so adding, removing or moving
  * other headings does not move it to a neighbor — not even to another
  * "Summary". If the text is still there but that occurrence is not, it goes
- * to the same-text heading nearest its saved index. A mark whose text is gone
- * (the heading was renamed) or that has no text (saved by version 1.5) falls
- * back to its saved index, if that heading is not already claimed. Marks
- * matching nothing are dropped.
+ * to the same-text heading nearest its saved index. A mark whose text is
+ * gone matches nothing: its heading was deleted, or renamed outside VS Code
+ * (renames in VS Code update the text, see followMarks()). It stays stored, so
+ * the heading pasted back (cut and paste) gets it again. Only marks without a
+ * text (saved by version 1.5) go by their saved index.
  *
  * @param {Object<string, object>} marks as returned by cleanMarks()/readMarks()
  * @param {string[]} texts the container's heading texts, by index
- * @returns {({ status?: string, star?: boolean } | undefined)[]} by index
+ * @param {({ cell: string, k: number } | undefined)[]} [places] where each
+ *        heading is (see placesOf()); Markdown files have none
+ * @returns {({ key: string, mark: object } | undefined)[]} by index: the
+ *          stored entry (key and mark) each heading got
  */
-function resolveMarks(marks, texts) {
+function matchMarks(marks, texts, places = []) {
   const out = new Array(texts.length).fill(undefined);
   const occ = occurrences(texts);
-  const strip = ({ status, star }) => ({ ...(status ? { status } : {}), ...(star ? { star } : {}) });
   const pending = [];
+  const inCell = new Map();
+  places.forEach((p, i) => {
+    if (!p) return;
+    if (!inCell.has(p.cell)) inCell.set(p.cell, []);
+    inCell.get(p.cell).push(i);
+  });
+  const byText = [];
   for (const [key, mark] of Object.entries(marks || {})) {
+    const free = ((mark.cell && inCell.get(mark.cell)) || []).filter((i) => !out[i]);
+    const k = mark.k || 0;
+    // Two cells with one id (a pasted copy, for the moment before VS Code
+    // gives it its own): the right occurrence of the text first.
+    const pick = (test) => {
+      const hits = free.filter(test);
+      return hits.find((i) => occ[i] === (mark.n || 0)) ?? hits[0];
+    };
+    const at = [(i) => places[i].k === k && texts[i] === mark.text, (i) => texts[i] === mark.text, (i) => places[i].k === k]
+      .map(pick)
+      .find((i) => i !== undefined);
+    if (at !== undefined) out[at] = { key, mark };
+    else byText.push([key, mark]);
+  }
+  for (const [key, mark] of byText) {
     const slot = Number(key);
     if (mark.text === undefined) {
-      pending.push([slot, mark]);
+      pending.push([key, mark]);
       continue;
     }
     const n = mark.n || 0;
@@ -140,13 +210,185 @@ function resolveMarks(marks, texts) {
         }
       });
     }
-    if (at >= 0) out[at] = strip(mark);
-    else pending.push([slot, mark]);
+    if (at >= 0) out[at] = { key, mark };
   }
-  for (const [slot, mark] of pending) {
-    if (slot < texts.length && !out[slot]) out[slot] = strip(mark);
+  for (const [key, mark] of pending) {
+    const slot = Number(key);
+    if (slot < texts.length && !out[slot]) out[slot] = { key, mark };
   }
   return out;
+}
+
+/**
+ * matchMarks(), reduced to what each heading shows.
+ *
+ * @returns {({ status?: string, star?: boolean } | undefined)[]} by index
+ */
+function resolveMarks(marks, texts, places) {
+  return matchMarks(marks, texts, places).map((m) => m && stripMark(m.mark));
+}
+
+/**
+ * Stored marks that match no heading (see matchMarks()): their heading was
+ * deleted, or renamed where the extension could not follow it. They are kept,
+ * listed under "Marks without a heading" in Show Marked Headings, until moved
+ * to a heading or removed there.
+ *
+ * @returns {{ key: string, mark: object }[]}
+ */
+function lostMarks(marks, texts, places) {
+  const matched = new Set(matchMarks(marks, texts, places).filter(Boolean).map((m) => m.key));
+  return Object.entries(marks || {})
+    .filter(([key, mark]) => !matched.has(key) && mark.text !== undefined)
+    .map(([key, mark]) => ({ key, mark }));
+}
+
+/**
+ * Add `extra` marks (that matched no heading) to marks about to be stored,
+ * under keys past the last heading, each only if it still matches nothing,
+ * so it cannot take another heading's place.
+ */
+function keepUnmatched(out, extra, texts, places) {
+  const shown = JSON.stringify(resolveMarks(out, texts, places));
+  let free = Math.max(texts.length, ...Object.keys(out).map((k) => Number(k) + 1));
+  for (const mark of extra) {
+    const next = { ...out, [String(free)]: mark };
+    if (JSON.stringify(resolveMarks(next, texts, places)) === shown) {
+      out[String(free)] = mark;
+      free++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Pair the headings of two versions of a text (for example one notebook cell
+ * before and after an edit): headings in the longest common run of equal
+ * texts are the same headings; between two such headings, as many headings
+ * before as after are the same headings renamed, in order; any other
+ * heading before the edit is gone.
+ *
+ * @param {string[]} before heading texts
+ * @param {string[]} after heading texts
+ * @returns {number[]} for each heading before, its index after, or -1
+ */
+function alignTexts(before, after) {
+  const n = before.length;
+  const m = after.length;
+  // lcs[i][j]: length of the longest common subsequence of before[i:], after[j:].
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] = before[i] === after[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+  const map = new Array(n).fill(-1);
+  let i = 0;
+  let j = 0;
+  let gapI = 0; // start of the current run of unmatched headings
+  let gapJ = 0;
+  const closeGap = (endI, endJ) => {
+    if (endI - gapI === endJ - gapJ) for (let k = 0; gapI + k < endI; k++) map[gapI + k] = gapJ + k;
+  };
+  while (i < n && j < m) {
+    if (before[i] === after[j] && lcs[i][j] === lcs[i + 1][j + 1] + 1) {
+      closeGap(i, j);
+      map[i] = j;
+      gapI = ++i;
+      gapJ = ++j;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) i++;
+    else j++;
+  }
+  closeGap(n, m);
+  return map;
+}
+
+/**
+ * The marks to store after an edit in VS Code, given where each heading went:
+ * a heading still there keeps its mark under its new text (a rename) and
+ * occurrence (a copy pasted above it does not take it), a deleted heading's
+ * mark is kept unmatched (see matchMarks()), and a new heading takes such an
+ * unmatched mark only if it matches it by cell id or text (cut and paste, a
+ * reload from disk). A copy of a marked heading gets no mark.
+ *
+ * @param {Object<string, object>} stored the container's stored marks
+ * @param {string[]} before heading texts before the edit
+ * @param {string[]} after heading texts after the edit
+ * @param {number[]} map for each heading before, its index after, or -1
+ * @param {object[]} [placesBefore] cell ids before (see placesOf())
+ * @param {object[]} [placesAfter] cell ids after
+ * @returns {Object<string, object>|undefined} the marks to store, or
+ *          undefined when the stored ones already match the headings right
+ *          and carry their current text and cell
+ */
+function followMarks(stored, before, after, map, placesBefore = [], placesAfter = []) {
+  const was = matchMarks(stored, before, placesBefore);
+  const want = new Array(after.length).fill(undefined);
+  const isNew = new Array(after.length).fill(true);
+  map.forEach((j) => {
+    if (j >= 0) isNew[j] = false;
+  });
+  const carried = new Set();
+  was.forEach((m, i) => {
+    if (m && map[i] >= 0 && !want[map[i]]) {
+      want[map[i]] = m.mark;
+      carried.add(m.key);
+    }
+  });
+  // Unmatched marks (from deleted headings, or stored without a match) go to
+  // new headings they match by cell id or text: a cut cell pasted back, or a
+  // notebook reloaded from disk (a `git pull`), where every cell is new.
+  const loose = Object.fromEntries(Object.entries(stored || {}).filter(([key]) => !carried.has(key)));
+  const used = new Set();
+  matchMarks(loose, after, placesAfter).forEach((m, j) => {
+    if (m && isNew[j] && !want[j]) {
+      want[j] = m.mark;
+      used.add(m.key);
+    }
+  });
+  const left = Object.entries(loose)
+    .filter(([key, mark]) => !used.has(key) && mark.text !== undefined)
+    .map(([, mark]) => mark);
+  const occ = occurrences(after);
+  const out = {};
+  want.forEach((m, j) => {
+    if (m) out[j] = entryFor(m, j, after, occ, placesAfter);
+  });
+  // Nothing to write when every heading gets the right mark and every mark
+  // already carries its heading's text and cell (slots may be old: they only
+  // break ties).
+  const now = matchMarks(stored, after, placesAfter);
+  const same = (a, b) => ['status', 'since', 'star', 'text', 'n', 'cell', 'k'].every((f) => a[f] === b[f]);
+  if (want.every((m, j) => (m ? now[j] && same(now[j].mark, out[j]) : !now[j]))) return undefined;
+  return keepUnmatched(out, left, after, placesAfter);
+}
+
+/**
+ * Where a line of a text is after an edit, or -1 if the edit replaced it.
+ * An edit within the line, or one starting after its first character, keeps
+ * the line (its text may change: a heading renamed in place); line breaks
+ * typed or pasted at its very start move it down; an edit that starts at its
+ * beginning and runs into a later line replaces it.
+ *
+ * @param {number} line 0-based, before the edit
+ * @param {{ start: { line: number, character: number }, end: { line: number, character: number }, text: string }[]} changes
+ *        the edit's changes, with ranges in the text before the edit (as in
+ *        VS Code's TextDocumentChangeEvent)
+ * @returns {number}
+ */
+function followLine(line, changes) {
+  let shift = 0;
+  for (const { start, end, text } of changes) {
+    const breaks = (text.match(/\n/g) || []).length;
+    if (end.line < line || (end.line === line && end.character === 0 && start.line < line)) shift += breaks - (end.line - start.line);
+    else if (start.line > line) continue;
+    // Text put at the very start of the line (Enter there, a paste above it)
+    // moves the rest of the line down by its line breaks.
+    else if (start.line === line && end.line === line) shift += start.character === 0 ? breaks : 0;
+    else if (start.line === line && start.character > 0) continue;
+    else return -1;
+  }
+  return line + shift;
 }
 
 /**
@@ -154,20 +396,32 @@ function resolveMarks(marks, texts) {
  * is resolved against the current headings and saved again under its current
  * slot together with its heading's text (which also upgrades marks saved by
  * older versions). `patch.status` null clears the status, `patch.star` false
- * removes the pin; empty marks are left out.
+ * removes the pin; empty marks are left out. A new status is dated `today`;
+ * the same status set again keeps its date. Marks matching no heading are
+ * kept (see lostMarks()).
  *
  * @param {Object<string, object>} marks current marks (see cleanMarks())
  * @param {string[]} texts the container's heading texts, by slot
  * @param {number} slot the heading to change
  * @param {{ status?: string|null, star?: boolean }} patch
+ * @param {object[]} [places] cell ids of the headings (see placesOf())
+ * @param {string} [today] YYYY-MM-DD, the date of a new status
  * @returns {Object<string, { status?: string, star?: boolean, text: string }>}
  */
-function updateMarks(marks, texts, slot, patch) {
-  const resolved = resolveMarks(marks, texts);
+function updateMarks(marks, texts, slot, patch, places = [], today = undefined) {
+  const resolved = resolveMarks(marks, texts, places);
   const mark = { ...(resolved[slot] || {}) };
   if ('status' in patch) {
-    if (patch.status && statusById(patch.status)) mark.status = patch.status;
-    else delete mark.status;
+    if (patch.status && statusById(patch.status)) {
+      if (mark.status !== patch.status) {
+        if (today) mark.since = today;
+        else delete mark.since;
+      }
+      mark.status = patch.status;
+    } else {
+      delete mark.status;
+      delete mark.since;
+    }
   }
   if ('star' in patch) {
     if (patch.star) mark.star = true;
@@ -177,18 +431,18 @@ function updateMarks(marks, texts, slot, patch) {
   const occ = occurrences(texts);
   const out = {};
   resolved.forEach((m, i) => {
-    if (m) out[i] = { ...m, text: texts[i], ...(occ[i] ? { n: occ[i] } : {}) };
+    if (m) out[i] = entryFor(m, i, texts, occ, places);
   });
-  return out;
+  return keepUnmatched(out, lostMarks(marks, texts, places).map((l) => l.mark), texts, places);
 }
 
 /**
  * The marks of a notebook's headings: those saved in the marks file, and for
  * headings without one, those still in their cell's metadata (version 1.5).
  *
- * @param {{ text: string, pos: number, cellSlot: number }[]} headings all
- *        headings in document order; `pos` is the cell index and `cellSlot`
- *        the heading's index within its cell
+ * @param {{ text: string, pos: number, cellSlot: number, cellId?: string }[]} headings
+ *        all headings in document order; `pos` is the cell index, `cellSlot`
+ *        the heading's index within its cell and `cellId` the cell's id
  * @param {Object<string, object>} fileMarks the notebook's entry in the marks
  *        file (see cleanMarks()), keyed by heading index
  * @param {(pos: number) => Object<string, object>} cellMarksAt marks in a
@@ -199,7 +453,8 @@ function updateMarks(marks, texts, slot, patch) {
  */
 function combineMarks(headings, fileMarks, cellMarksAt) {
   const texts = headings.map((h) => h.text);
-  const fromFile = resolveMarks(fileMarks, texts);
+  const places = placesOf(headings);
+  const fromFile = resolveMarks(fileMarks, texts, places);
   const occ = occurrences(texts);
   const byCell = new Map();
   headings.forEach((h, i) => {
@@ -215,7 +470,7 @@ function combineMarks(headings, fileMarks, cellMarksAt) {
       const mark = fromFile[i] || fromCell[slot];
       if (!mark) return;
       if (!fromFile[i]) legacy.add(i);
-      marks[i] = { ...mark, text: headings[i].text, ...(occ[i] ? { n: occ[i] } : {}) };
+      marks[i] = entryFor(mark, i, texts, occ, places);
     });
   }
   return { marks, legacy };
@@ -271,6 +526,7 @@ function assignMarks(flat, marksOf, markers, containerOf = (n) => n.pos) {
     node.star = !!mark.star;
     node.autoStatus = !mark.status && hasMarker(node.text, markers);
     node.status = mark.status || (node.autoStatus ? 'question' : undefined);
+    node.since = mark.since;
   }
 }
 
@@ -374,6 +630,11 @@ module.exports = {
   cleanMarks,
   readMarks,
   resolveMarks,
+  lostMarks,
+  placesOf,
+  alignTexts,
+  followMarks,
+  followLine,
   updateMarks,
   combineMarks,
   occurrences,

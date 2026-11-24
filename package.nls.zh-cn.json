@@ -39,5 +39,10 @@
   "command.showMarked": "显示有标记的标题",
   "command.copyContent": "复制本节内容",
   "config.toCheckMarkers": "标题文字里含有这些记号的，不用设置状态也显示为\"待核对\"，例如 \"## ??? Analysis\"。清空列表即关闭。",
-  "command.clearOutputs": "清除本节输出…"
+  "command.clearOutputs": "清除本节输出…",
+  "command.previousMark": "跳到上一个标记",
+  "command.nextMark": "跳到下一个标记",
+  "command.copyChecklist": "复制标记清单",
+  "command.moveLostMark": "移到标题…",
+  "command.removeLostMark": "删除标记"
 }

@@ -6,7 +6,7 @@
 
 VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法看。这个扩展保留全部六级标题，但打开时只展开到你设定的层级（默认到 `##`），先看整体结构，需要时再逐级展开。
 
-<img src="media/screenshots/tour.gif" alt="功能演示：目录打开时折叠，点标题跳到对应小节，右键设置状态，书签按钮按文件列出整个项目里有标记的标题，搜索框边输入边过滤，侧边栏关着时用 Headings 按钮打开跳转列表" width="800">
+<img src="media/screenshots/tour.gif" alt="功能演示：目录打开时折叠，点标题跳到对应小节，右键设置状态，箭头按钮跳到下一个未完成的标题，书签按钮按文件列出整个项目里有标记的标题，搜索框边输入边过滤，侧边栏关着时用 Headings 按钮打开跳转列表" width="800">
 
 ## 快速上手
 
@@ -29,7 +29,7 @@ VS Code 自带的 Outline 会把所有标题全部展开，标题一多就没法
 - **右键复制**：复制标题文字、**本节引用**（文件、带编号的完整路径和 cell 范围，如 `code/Analysis.ipynb · 2  Analysis › 2.1  Summary · 第 12–30 个 cell`；方便发给 Claude Code 等 AI 助手，它们读得到选中的文字，读不到选中的 cell），或者把**本节内容**复制成纯文本。
 - **中英文界面**：命令、菜单、设置和提示信息跟随 VS Code 的显示语言。
 - **一键设置 cell 标签**：每个代码 cell 右下角有一个 **Tags** 按钮，点击后弹出简短的勾选列表，列出在 Jupyter Book / MyST 网页上把 cell 部分内容折叠起来（可点开）的标签：`hide-output`、`hide-input`、`hide-cell`。其他标签可以直接输入。标签保存在 Jupyter、Jupyter Book 和 nbconvert 读取的位置。<br><img src="media/screenshots/tags.png" alt="代码 cell 的标签勾选列表，勾选了 hide-output" width="600">
-- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色的状态图标。标题里带 `???` 的自动算作"待核对"。在 notebook 里，鼠标移到 Markdown cell 上时出现的工具条里也有**设置状态**按钮，可以设置或清除这个 cell 里标题的状态。<br><img src="media/screenshots/cell-status.png" alt="从 Markdown cell 工具条打开的状态列表，包含清除状态" width="600">
+- **状态标记**：右键标题 → **Set Status…**（设置状态），可标为待做、进行中、待核对或已完成，标题前的层级图标会换成彩色的状态图标。标题里带 `???` 的自动算作"待核对"。在 notebook 里，鼠标移到 Markdown cell 上时出现的工具条里也有**设置状态**按钮，可以设置或清除这个 cell 里标题的状态。鼠标悬停可以看到状态是哪天设的。目录工具栏上的 **↑ ↓**（先按 `Cmd+K` 再按 `B` / `N`）跳到上一个或下一个待做、进行中、待核对的标题；工具栏 `…` 菜单里的 **Copy Marks as Checklist**（复制标记清单）把整个项目的状态复制成 Markdown 清单，方便贴进笔记。<br><img src="media/screenshots/cell-status.png" alt="从 Markdown cell 工具条打开的状态列表，包含清除状态" width="600">
 - **置顶**：**Pin to Top**（置顶）在标题前显示金色图钉图标，并把标题列到目录顶部的"已置顶"分组里，点一下就能跳过去。
 - **折叠起来也看得到标记**：每个上级标题会汇总它下面的标记，例如 `○2 ➤1 ✓3 ⤒2`（○ 待做、➤ 进行中、? 待核对、✓ 已完成、⤒ 置顶）；书签按钮按文件列出整个项目里有标记的小节。标记保存在项目里而不是你的文档里，换电脑也能接着用。<br><img src="media/screenshots/project-marks.png" alt="书签视图：一个 notebook 和一个 Markdown 文件里有标记的标题，各自列在文件名下面；活动栏图标上的数字是还待做或待核对的标题数" width="400">
 - **清除小节输出**（右键 → **Clear Section Outputs…**）：目录里的输出大小能看出是哪些小节让 notebook 变大，确认后一步清除，需要时用 `Cmd+Z` 恢复。
@@ -89,13 +89,15 @@ code --install-extension releases/notebook-headings-<version>.vsix
 | --- | --- |
 | Filter Headings（漏斗） | 输入关键词过滤；Enter 保留，Esc 取消。过滤时变成 ✕，点击清除。 |
 | Show Marked Headings（书签） | 按文件列出整个项目里所有 notebook 和 Markdown 文件中置顶或有任何状态的标题，当前文件排在最前；每个标题下面的整节都会展开显示。点别的文件里的标题会打开那个文件并跳过去。点 ✕ 返回。 |
+| ↑ ↓ Go to Previous / Next Mark | 跳到当前文件里上一个或下一个待做、进行中、待核对的标题，到头后从另一端继续。有这样的标题时才显示。 |
 | # Toggle Cell and Line Numbers | 显示/隐藏每节的起始位置（`C14 │`、`L26 │`），等同于设置 `showPosition`。 |
 | 1≡ Toggle Heading Numbers | 显示/隐藏编号。 |
 | ⊟ Collapse to Default Level | 恢复默认展开层级。 |
+| `…` → Copy Marks as Checklist | 把项目里所有设了状态的标题复制成 Markdown 清单，按文件分组（已完成的打勾），并写明从哪天开始。 |
 
 在标题上**右键**：
 
-- **Set Status…**（设置状态）：待做、进行中、待核对或已完成。标题文字里带 `???` 的算作"待核对"，直到你设置了别的状态或删掉 `???`。
+- **Set Status…**（设置状态）：待做、进行中、待核对或已完成（标题有你设置过的状态时，列表里还有"清除状态"）。标题文字里带 `???` 的算作"待核对"，直到你设置了别的状态或删掉 `???`。
 - **Clear Status**（清除状态）：只在你设置过状态的标题上出现。
 - **Pin to Top / Unpin**（置顶 / 取消置顶）：置顶的标题列在目录顶部的"已置顶"分组里，点一下就跳过去。
 - **Select Section**（选中本节）：选中这一节的所有 cell（notebook）或所有行（Markdown），包括下级小节，并把焦点切到编辑器。之后用 `Cmd+X` / `Cmd+V` 移动整节，`Cmd+C` 复制，或者运行、删除选中的 cell。如果这个标题和前面的标题共用第一个 cell，这个 cell 也会被选中，状态栏会提示。
@@ -116,6 +118,8 @@ code --install-extension releases/notebook-headings-<version>.vsix
 | 快捷键（macOS / Windows、Linux） | 生效位置 | 功能 |
 | --- | --- | --- |
 | 先 `Cmd+K` 再 `H` / 先 `Ctrl+K` 再 `H` | 打开着 notebook 或 Markdown 文件时（焦点在编辑器或目录面板里都行） | 快速跳转到标题 |
+| 先 `Cmd+K` 再 `N` / 先 `Ctrl+K` 再 `N` | 同上 | 跳到下一个标记 |
+| 先 `Cmd+K` 再 `B` / 先 `Ctrl+K` 再 `B` | 同上 | 跳到上一个标记 |
 | `Cmd+Alt+F` / `Ctrl+Alt+F` | Notebook Headings 面板 | 搜索过滤 |
 
 ## 设置项
@@ -156,7 +160,9 @@ code --install-extension releases/notebook-headings-<version>.vsix
 - **如果 git 忽略了这个文件**（比如 `.gitignore` 里有一行 `.vscode/`），插件会在每个项目里提醒一次；点 **修复 .gitignore** 会加几行规则，让 git 只保留这一个文件。手动改的话，加这三行：`!/.vscode/`、`/.vscode/*`、`!/.vscode/notebook-headings.json`（如果没有忽略整个 `.vscode` 文件夹，只需最后一行）。
 - **被 git 忽略的文档**：标记只保存在这台电脑上，这样私人文件的路径和标题不会进入仓库。（没有作为工作区文件夹打开的 git 仓库里的文件也一样。）
 - 在 VS Code 里重命名、移动或删除文档，标记会随之更新；`git pull` 带来的修改会立即显示。
-- 标记跟着标题文字走，修改其他标题不会让它错位。
+- 标记跟着标题走：增加或修改其他标题不会让它错位；在 VS Code 里给标题改名，标记还在；复制出来的标题不带标记；删掉标题，它的标记就不再显示在目录里（把标题粘贴回来，标记会回来）。
+- 如果 notebook 的 cell 带 ID（nbformat 4.5，新版 Jupyter 和 VS Code 保存的格式），标记绑定在 cell 上，在别的编辑器里或通过 `git pull` 改了标题，标记也还在。
+- 找不到标题的标记不会被丢掉：书签视图里，它列在所属文件下的**找不到标题的标记**里。点一下可以把它移到某个标题上（状态和日期都保留），或者右键 → **删除标记**。<br><img src="media/screenshots/lost-marks.png" alt="书签视图里的找不到标题的标记：两个标记，各自带着原来的标题文字、状态和日期" width="400">
 - 合并后文件里如果有冲突标记，标记会暂停显示，直到你解决冲突；这个文件不会被覆盖。
 - 1.5 版存在 notebook cell 里的标记仍然有效，下次修改时会自动搬到这个文件里。
 
@@ -192,7 +198,7 @@ code --install-extension releases/notebook-headings-<version>.vsix
 - 一个 notebook cell 里可以有多个标题，但光标和滚动位置只能精确到 cell：在 notebook 里移动时，目录和状态栏显示的是这个 cell 的最后一个标题（刚点过的标题除外）。
 - 标题上色借用了 VS Code 给文件名上色的机制，因此每个标题前都有一个图标位。
 - 标题右侧的灰色文字只能是纯文本，所以标记汇总用的是符号（`○ ➤ ? ✓ ⤒`），不能显示彩色图标。
-- 标记（详见[标记保存在哪里](#标记保存在哪里)）不能用 `Cmd+Z` 撤销；在 VS Code 外（Finder、`git mv`）重命名文档会丢失标记；多个同名标题中的一个被改名时，标记可能落到最近的同名标题上。
+- 标记（详见[标记保存在哪里](#标记保存在哪里)）不能用 `Cmd+Z` 撤销；在 VS Code 外重命名文档（Finder、`git mv`）会丢失标记。Markdown 文件和没有 cell ID 的旧版 notebook 里，在 VS Code 外改了标题（比如 `git pull` 带来的修改），标记会脱离标题，需要到**找不到标题的标记**里把它移回去。
 
 ## 参与开发
 

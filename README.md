@@ -10,7 +10,7 @@ notebook with 1,000+ headings. Notebook Headings keeps all six heading levels
 but opens the tree expanded only to the level you choose (default: `##`), so
 you see the structure first and drill down on demand.
 
-<img src="media/screenshots/tour.gif" alt="A short tour: the view opens collapsed, a click jumps to a section, a status is set from the right-click menu, the bookmark button lists the marked headings of every file in the project, the filter narrows the tree as you type, and the Headings button opens Go to Heading with the side bar closed" width="800">
+<img src="media/screenshots/tour.gif" alt="A short tour: the view opens collapsed, a click jumps to a section, a status is set from the right-click menu, the bookmark button lists the marked headings of every file in the project, the arrow buttons jump to the next heading still to do, the filter narrows the tree as you type, and the Headings button opens Go to Heading with the side bar closed" width="800">
 
 ## Quick start
 
@@ -75,6 +75,11 @@ you see the structure first and drill down on demand.
   level shape. Headings containing `???` count as To check
   automatically. In a notebook, the toolbar that appears over a Markdown
   cell also has **Set Status…** for the cell's heading, with Clear Status.
+  The tooltip says since when a heading has its status. **↑ ↓** in the
+  view's toolbar (`Cmd+K` then `B` / `N`) jump to the previous or next
+  heading still to do, in progress or to check; **Copy Marks as Checklist**
+  (in the toolbar's `…` menu) copies the project's statuses as a Markdown
+  checklist, to paste into your notes.
   <br><img src="media/screenshots/cell-status.png" alt="The status list opened from the toolbar of a Markdown cell, with Clear Status" width="600">
 - **Pin to top.** **Pin to Top** puts a gold pin icon before a heading and
   lists it in a **Pinned** group at the top of the view, one click away.
@@ -163,15 +168,18 @@ View toolbar, left to right:
 | --- | --- |
 | Filter Headings (funnel) | Type to filter; Enter keeps the filter, Esc cancels. Turns into ✕ (Clear Filter) while filtering. |
 | Show Marked Headings (bookmark) | The marked headings (pinned or with any status) of every notebook and Markdown file in the project, grouped by file with the current one first; each with its whole section expanded. Click a heading in another file to open it there. ✕ goes back. |
+| ↑ ↓ Go to Previous / Next Mark | Jump to the previous or next heading of the current document that is TODO, In progress or To check, starting over at the end. Shown when there is one. |
 | # Toggle Cell and Line Numbers | Show or hide where each section starts (`C14 │`, `L26 │`); the same as the `showPosition` setting. |
 | 1≡ Toggle Heading Numbers | Show or hide outline numbers. |
 | ⊟ Collapse to Default Level | Restore the default expansion. |
+| `…` → Copy Marks as Checklist | Every heading with a status in the project, as a Markdown checklist grouped by file (Finished ones ticked), with since when. |
 
 Right-click a heading for:
 
-- **Set Status…**: TODO, In progress, To check or Finished. A heading
-  whose text contains `???` counts as To check until you set another status
-  or remove the `???`.
+- **Set Status…**: TODO, In progress, To check or Finished (and Clear
+  Status, when the heading has a status you set). A heading whose text
+  contains `???` counts as To check until you set another status or remove
+  the `???`.
 - **Clear Status**: shown on headings with a status you set.
 - **Pin to Top** / **Unpin**: pinned headings are listed in the **Pinned**
   group at the top of the view; click one to jump there.
@@ -227,6 +235,8 @@ Keyboard shortcuts (change them in *Keyboard Shortcuts* by searching
 | Shortcut (macOS / Windows, Linux) | Where | Command |
 | --- | --- | --- |
 | `Cmd+K` then `H` / `Ctrl+K` then `H` | a notebook or Markdown file is open (focus in the editor or in the headings view) | Go to Heading… |
+| `Cmd+K` then `N` / `Ctrl+K` then `N` | same | Go to Next Mark |
+| `Cmd+K` then `B` / `Ctrl+K` then `B` | same | Go to Previous Mark |
 | `Cmd+Alt+F` / `Ctrl+Alt+F` | Notebook Headings view | Filter Headings |
 
 ## Settings
@@ -287,7 +297,17 @@ on any computer.
   of a git repository that is not open as a workspace folder.)
 - Renaming, moving or deleting a document in VS Code updates its marks, and
   changes that arrive with a `git pull` show up right away.
-- A mark follows its heading's text, so editing other headings does not move it.
+- A mark stays with its heading: adding or editing other headings does not
+  move it, renaming the heading in VS Code keeps it, a copy of the heading
+  gets no mark, and deleting the heading takes its mark off the tree (pasting
+  the heading back brings it back).
+- In notebooks whose cells have ids (nbformat 4.5, the format of recent
+  Jupyter and VS Code), a mark is tied to its cell, so it also stays when the
+  heading is renamed elsewhere: in another editor, or by a `git pull`.
+- A mark whose heading is gone is not thrown away: Show Marked Headings lists
+  it under **Marks without a heading** in its file. Click it to move it to a
+  heading (it keeps its status and date), or right-click → **Remove Mark**.
+  <br><img src="media/screenshots/lost-marks.png" alt="Show Marked Headings with two marks under Marks without a heading, each with its old heading text, status and date" width="400">
 - If a merge leaves conflict markers in the file, marks are paused until you
   resolve them; the file is never overwritten.
 - Marks that version 1.5 saved inside notebook cells still work, and move to
@@ -338,9 +358,10 @@ To set colors for one theme only, nest them under the theme name, e.g.
 - The grey text after a heading can only hold plain text, so mark summaries
   use symbols (`○ ➤ ? ✓ ⤒`) rather than the colored icons.
 - Marks (see [Where marks are stored](#where-marks-are-stored)) cannot be
-  undone with `Cmd+Z`, are lost when a document is renamed outside VS Code
-  (Finder, `git mv`), and may move to the nearest same-named heading when one
-  of several headings with the same text is renamed.
+  undone with `Cmd+Z`, and are lost when a document is renamed outside VS
+  Code (Finder, `git mv`). In Markdown files and in older notebooks without
+  cell ids, a heading renamed outside VS Code (e.g. by a `git pull`) loses its
+  mark until you move it back from **Marks without a heading**.
 
 ## Contributing
 
